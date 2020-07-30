@@ -6,7 +6,7 @@ requires = [
   "cython>=0.29.2",  # Note: sync with setup.py
   "pandas<=0.24.2; python_version=='2.7'",
   "pandas; python_version>='3.5'",
-  "numpy<=1.16.5; python_version=='2.7'",
+  "numpy<=1.16.6; python_version=='2.7'",
   "numpy; python_version>='3.5'",
   "numexpr"
 ]

@@ -49,8 +49,8 @@ install_requires = []
 setup_requires = []
 tests_requires = ['pytest', 'nose']
 if v < (3,):
-    install_requires.extend(['pandas<=0.24.2', 'numpy<=1.16.5'])
-    setup_requires.extend(['pandas<=0.24.2', 'numpy<=1.16.5'])
+    install_requires.extend(['pandas<=0.24.2', 'numpy<=1.16.6'])
+    setup_requires.extend(['pandas<=0.24.2', 'numpy<=1.16.6'])
 else:
     install_requires.extend(['pandas', 'numpy'])
     setup_requires.extend(['pandas', 'numpy'])
