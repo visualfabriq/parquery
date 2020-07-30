@@ -16,6 +16,11 @@ jobs:
       - run:
           name: Run Tests
           command: pytest -vs parquery/tests/
+      - store_test_results:
+          path: parquery/test-results
+      - store_artifacts:
+          path: parquery/test-results
+          destination: tr1
 
   build3:
     docker:
@@ -33,6 +38,11 @@ jobs:
       - run:
           name: Run Tests
           command: pytest -vs parquery/tests/
+      - store_test_results:
+          path: parquery/test-results
+      - store_artifacts:
+          path: parquery/test-results
+          destination: tr1
 
 workflows:
   version: 2
