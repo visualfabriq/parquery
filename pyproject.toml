@@ -1,0 +1,23 @@
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = [
+  "setuptools",
+  "wheel",
+  "cython>=0.29.2",  # Note: sync with setup.py
+  "pandas<=0.24.2; python_version=='2.7'",
+  "pandas; python_version>='3.5'",
+  "numpy<=1.16.5; python_version=='2.7'",
+  "numpy; python_version>='3.5'",
+  "numexpr"
+]
+
+[tool.black]
+target-version = ['py27', 'py35', 'py36', 'py37', 'py38', 'py39']
+exclude = '''
+(
+  | \.egg
+  | \.git
+  | build
+  | setup.py
+)
+'''
