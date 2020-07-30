@@ -11,19 +11,15 @@ from __future__ import absolute_import
 
 import codecs
 import os
-
-from setuptools import setup, Extension, find_packages
 from os.path import abspath
 from sys import version_info as v
-from Cython.Build import cythonize, build_ext
-import numpy
 
+from setuptools import setup, find_packages
 
 # Check this Python version is supported
 if any([v < (2, 6), (3,) < v < (3, 5)]):
     raise Exception("Unsupported Python version %d.%d. Requires Python >= 2.7 "
                     "or >= 3.5." % v[:2])
-
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -60,27 +56,26 @@ extras_requires = [
 ]
 
 extensions = []
-ext_modules = cythonize(extensions)
 
 package_data = {}
 classifiers = [
-        'Development Status :: 4 - Beta',
-        'Intended Audience :: Developers',
-        'Intended Audience :: Information Technology',
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: BSD License',
-        'Programming Language :: Python',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-        'Operating System :: Microsoft :: Windows',
-        'Operating System :: Unix',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Information Technology',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Programming Language :: Python',
+    'Topic :: Software Development :: Libraries :: Python Modules',
+    'Operating System :: Microsoft :: Windows',
+    'Operating System :: Unix',
+    'Programming Language :: Python :: 2',
+    'Programming Language :: Python :: 2.7',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.5',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
 ]
 
 setup(
@@ -97,8 +92,8 @@ setup(
     url='https://github.com/visualfabriq/parquery',
     license='MIT',
     platforms=['any'],
-    ext_modules=ext_modules,
-    cmdclass={'build_ext': build_ext},
+    ext_modules=extensions,
+    cmdclass={},
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=tests_requires,
