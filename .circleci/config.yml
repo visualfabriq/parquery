@@ -15,7 +15,7 @@ jobs:
           command: python setup.py build_ext --inplace && sudo python setup.py install
       - run:
           name: Run Tests
-          command: pytest -vs parquery/tests/ --dist=loadscope --junitxml=test-results/pytest/pytest-report.xml
+          command: pytest -vs parquery/tests/ --junitxml=test-results/pytest/pytest-report.xml
       - store_test_results:
           path: test-results
       - store_artifacts:
@@ -37,7 +37,7 @@ jobs:
           command: python setup.py build_ext --inplace && sudo python setup.py install
       - run:
           name: Run Tests
-          command: pytest -vs parquery/tests/ --dist=loadscope --junitxml=test-results/pytest/pytest-report.xml
+          command: pytest -vs parquery/tests/ --junitxml=test-results/pytest/pytest-report.xml
       - store_test_results:
           path: test-results
       - store_artifacts:
