@@ -12,6 +12,12 @@ def aggregate_pq(
         row_group_filter=None,
         as_df=True,
         debug=False):
+    """
+    A function to aggregate a parquetfile using pandas
+    NB: we assume that all columns are strings
+
+    """
+
     pq_file = pq.ParquetFile(file_name)
 
     if data_filter:
@@ -61,7 +67,7 @@ def aggregate_pq(
 
         # aggregate
         if aggregate:
-            df = df.groupby(groupby_cols, as_index=False).agg(agg)
+            df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         # save the result
         result.append(df)
@@ -73,13 +79,14 @@ def aggregate_pq(
     # combine results
     if debug:
         print('Combining results')
+
     if result:
         if len(result) == 1:
             df = result[0]
         else:
             df = pd.concat(result, ignore_index=True, sort=False)
             if aggregate:
-                df = df.groupby(groupby_cols, as_index=False).agg(agg)
+                df = groupby_result(agg, df, groupby_cols, measure_cols)
 
             # cleanup
             for result_df in result:
@@ -99,6 +106,16 @@ def aggregate_pq(
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def groupby_result(agg, df, groupby_cols, measure_cols):
+    if groupby_cols:
+        df = df.groupby(groupby_cols, as_index=False).agg(agg)
+    else:
+        ser = df.apply(agg)
+        df = pd.DataFrame([{col[0]: ser[col[0]] for col in measure_cols}])
+        del ser
+    return df
 
 
 def convert_filters(data_filter, pq_file):

@@ -700,6 +700,35 @@ class TestParquery(object):
         # nb: here we do a less specific check to make sureit passes
         assert_allclose([list(x)[1:] for x in result_parquery.to_numpy()], ref, rtol=1e-2)
 
+    def test_groupby_12(self):
+        """
+        test_groupby_12: Test groupby without groupby column
+        """
+        random.seed(1)
+
+        groupby_cols = []
+        # no operation is specified in `agg_list`, so `sum` is used by default.
+        agg_list = ['f4', 'f5', 'f6']
+        num_rows = 2000
+
+        # -- Data --
+        g = self.gen_almost_unique_row(num_rows)
+        data = np.fromiter(g, dtype='S1,f8,i8,i4,f8,i8,i4')
+
+        # -- ParQuery --
+        print('--> ParQuery')
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+
+        df_to_parquet(pd.DataFrame(data), self.filename)
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        print(result_parquery)
+
+        # Numpy result
+        print('--> Numpy')
+        np_result = [data['f4'].sum(), data['f5'].sum(), data['f6'].sum()]
+
+        assert list(result_parquery.loc[0]) == np_result
+
     def test_where_terms00(self):
         """
         test_where_terms00: get terms in one column bigger than a certain value
