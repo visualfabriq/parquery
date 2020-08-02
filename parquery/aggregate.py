@@ -1,6 +1,6 @@
 import pandas as pd
 import pyarrow.parquet as pq
-
+import pyarrow as pa
 
 def aggregate_pq(
         file_name,
@@ -9,6 +9,7 @@ def aggregate_pq(
         data_filter=None,
         aggregate=True,
         row_group_filter=None,
+        as_df=True,
         debug=False):
     pq_file = pq.ParquetFile(file_name)
 
@@ -93,7 +94,10 @@ def aggregate_pq(
         # empty result
         df = pd.DataFrame(None, columns=cols)
 
-    return df
+    if as_df:
+        return df
+    else:
+        return pa.Table.from_pandas(df, preserve_index=False)
 
 
 def convert_filters(data_filter, pq_file):
