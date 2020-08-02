@@ -1,9 +1,7 @@
 import os
-import pandas as pd
+
 import pyarrow as pa
 import pyarrow.parquet as pq
-import shutil
-import urllib
 
 
 def df_to_parquet(df, filename, workdir=None, chunksize=100000):

@@ -1,6 +1,7 @@
 import pandas as pd
-import pyarrow.parquet as pq
 import pyarrow as pa
+import pyarrow.parquet as pq
+
 
 def aggregate_pq(
         file_name,
