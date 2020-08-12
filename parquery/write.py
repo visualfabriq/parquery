@@ -4,7 +4,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
-def df_to_parquet(df, filename, workdir=None, chunksize=100000):
+def df_to_parquet(df, filename, workdir=None, chunksize=100000, debug=False):
     if workdir:
         full_filename = os.path.join(workdir, filename)
     else:
@@ -20,7 +20,8 @@ def df_to_parquet(df, filename, workdir=None, chunksize=100000):
     # write in chunksizes
     while len(df) >= chunksize:
         # select data
-        print('Writing ' + str(i) + '-' + str(i + chunksize))
+        if debug:
+            print('Writing ' + str(i) + '-' + str(i + chunksize))
         i += chunksize
         data_table = pa.Table.from_pandas(df[0:chunksize], preserve_index=False)
         df = df[chunksize:]
@@ -36,7 +37,8 @@ def df_to_parquet(df, filename, workdir=None, chunksize=100000):
 
     # save dangling results
     if not df.empty:
-        print('Writing ' + str(i) + '-' + str(i + len(df)))
+        if debug:
+            print('Writing ' + str(i) + '-' + str(i + len(df)))
         data_table = pa.Table.from_pandas(df, preserve_index=False)
         if writer is None:
             writer = pq.ParquetWriter(full_filename,

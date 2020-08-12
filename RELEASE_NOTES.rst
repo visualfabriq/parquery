@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.3
+==============
+- Introduced writer debug output
+
 Release  0.1.2
 ==============
 - Updated manifest
