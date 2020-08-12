@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.2
+==============
+- Updated manifest
+
 Release  0.1.1
 ==============
 - Updated requirements for dependencies based on the python version
