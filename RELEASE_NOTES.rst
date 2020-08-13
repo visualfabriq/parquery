@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.6
+==============
+- Fix Python 2 requirements
+
 Release  0.1.5
 ==============
 - Updated Links

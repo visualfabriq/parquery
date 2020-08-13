@@ -155,7 +155,6 @@ def groupby_result(agg, df, groupby_cols, measure_cols):
     else:
         ser = df.apply(agg)
         df = pd.DataFrame([{col[0]: ser[col[0]] for col in measure_cols}])
-        del ser
     return df
 
 
