@@ -11,16 +11,16 @@ def deserialize_df(buf):
     return context.deserialize(buf)
 
 
-def serialize_pq(pq):
+def serialize_pa_table(pa_table):
     sink = pa.BufferOutputStream()
-    writer = pa.ipc.new_stream(sink, pq.schema)
-    writer.write(pq)
+    writer = pa.ipc.new_stream(sink, pa_table.schema)
+    writer.write(pa_table)
     writer.close()
     buf = sink.getvalue()
     return buf
 
 
-def deserialize_pq(buf):
+def deserialize_pa_table(buf):
     reader = pa.ipc.open_stream(buf)
-    pq = reader.read_all()
-    return pq
+    pa_table = reader.read_all()
+    return pa_table

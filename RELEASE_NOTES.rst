@@ -2,6 +2,14 @@
 Release notes for parquery
 ========================
 
+Release  0.1.5
+==============
+- Updated Links
+
+Release  0.1.4
+==============
+- Added arrow aggregation method
+
 Release  0.1.3
 ==============
 - Introduced writer debug output

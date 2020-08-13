@@ -21,7 +21,8 @@ def aggregate_pq(
     pq_file = pq.ParquetFile(file_name)
 
     if data_filter:
-        data_filter, metadata_filter = convert_filters(data_filter, pq_file)
+        metadata_filter = convert_metadata_filter(data_filter, pq_file)
+        data_filter = convert_data_filter(data_filter)
     else:
         metadata_filter = None
 
@@ -108,6 +109,46 @@ def aggregate_pq(
         return pa.Table.from_pandas(df, preserve_index=False)
 
 
+def aggregate_pa(
+        pa_table,
+        groupby_cols,
+        measure_cols,
+        data_filter=None,
+        aggregate=True,
+        as_df=True,
+        debug=False):
+    """
+    A function to aggregate a arrow table using pandas
+    NB: we assume that all columns are strings
+
+    """
+    if data_filter:
+        data_filter = convert_data_filter(data_filter)
+
+    # check measure_cols
+    measure_cols = check_measure_cols(measure_cols)
+
+    # create pandas-compliant aggregation
+    agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+
+    df = pa_table.to_pandas(categories=groupby_cols)
+
+    # filter
+    if data_filter:
+        # filter based on the given requirements
+        mask = df.eval(data_filter)
+        df = df[mask]
+
+    # aggregate
+    if aggregate:
+        df = groupby_result(agg, df, groupby_cols, measure_cols)
+
+    if as_df:
+        return df
+    else:
+        return pa.Table.from_pandas(df, preserve_index=False)
+
+
 def groupby_result(agg, df, groupby_cols, measure_cols):
     if groupby_cols:
         df = df.groupby(groupby_cols, as_index=False).agg(agg)
@@ -118,7 +159,7 @@ def groupby_result(agg, df, groupby_cols, measure_cols):
     return df
 
 
-def convert_filters(data_filter, pq_file):
+def convert_metadata_filter(data_filter, pq_file):
     # we check if we have INT type of columns to try to do pushdown statistics filtering
     metadata_filter = [
         [pq_file.metadata.schema.names.index(col), sign, values]
@@ -127,8 +168,12 @@ def convert_filters(data_filter, pq_file):
     metadata_filter = [[col_nr, sign, values] for col_nr, sign, values in metadata_filter
                        if pq_file.schema.column(col_nr).physical_type in ['INT8', 'INT16', 'INT32', 'INT64']
                        ]
-    data_filter = ' and '.join([col + ' ' + sign + ' ' + str(values) for col, sign, values in data_filter])
-    return data_filter, metadata_filter
+    return metadata_filter
+
+
+def convert_data_filter(data_filter):
+    data_filter_str = ' and '.join([col + ' ' + sign + ' ' + str(values) for col, sign, values in data_filter])
+    return data_filter_str
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
