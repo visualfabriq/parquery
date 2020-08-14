@@ -7,9 +7,10 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numpy.testing import assert_allclose
 
-from parquery import df_to_parquet, aggregate_pq
+from parquery import df_to_parquet, aggregate_pq, serialize_pa_table, deserialize_pa_table
 
 
 class TestParquery(object):
@@ -851,3 +852,14 @@ class TestParquery(object):
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
+    def test_pa_serialization(self):
+        iterable = ((x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8')
+        df = pd.DataFrame(data)
+
+        data_table = pa.Table.from_pandas(df, preserve_index=False)
+        buf = serialize_pa_table(data_table)
+        data_table_2 = deserialize_pa_table(buf)
+
+        assert data_table == data_table_2

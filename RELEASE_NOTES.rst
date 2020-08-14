@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.7
+==============
+- Fix Python 2 legacy differences in pyarrow
+
 Release  0.1.6
 ==============
 - Fix Python 2 requirements

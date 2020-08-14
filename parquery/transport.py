@@ -13,9 +13,8 @@ def deserialize_df(buf):
 
 def serialize_pa_table(pa_table):
     sink = pa.BufferOutputStream()
-    writer = pa.ipc.new_stream(sink, pa_table.schema)
-    writer.write(pa_table)
-    writer.close()
+    with pa.ipc.RecordBatchStreamWriter(sink, pa_table.schema) as writer:
+        writer.write(pa_table)
     buf = sink.getvalue()
     return buf
 
