@@ -89,10 +89,6 @@ def aggregate_pq(
             if aggregate:
                 df = groupby_result(agg, df, groupby_cols, measure_cols)
 
-            # cleanup
-            for result_df in result:
-                del result_df
-
         if row_group_filter is not None:
             df = df.rename(columns={x[0]: x[2] for x in measure_cols})
 
@@ -102,6 +98,10 @@ def aggregate_pq(
     else:
         # empty result
         df = pd.DataFrame(None, columns=cols)
+
+    # ensure typing; we assume groupby columns always can be categorical
+    for col in groupby_cols:
+        df[col] = df[col].astype('category')
 
     if as_df:
         return df

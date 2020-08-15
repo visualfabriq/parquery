@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.8
+==============
+- Ensure that groupby columns are seen as categorical series
+
 Release  0.1.7
 ==============
 - Fix Python 2 legacy differences in pyarrow
