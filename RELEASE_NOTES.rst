@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.9
+==============
+- Remove the entire uses of categorical values as they impede concatenation of results
+
 Release  0.1.8
 ==============
 - Ensure that groupby columns are seen as categorical series

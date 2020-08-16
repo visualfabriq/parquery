@@ -50,7 +50,7 @@ def aggregate_pq(
 
         # get data into df
         sub = pq_file.read_row_group(row_group, columns=cols)
-        df = sub.to_pandas(categories=groupby_cols)
+        df = sub.to_pandas()
         if df.empty:
             continue
 
@@ -99,10 +99,6 @@ def aggregate_pq(
         # empty result
         df = pd.DataFrame(None, columns=cols)
 
-    # ensure typing; we assume groupby columns always can be categorical
-    for col in groupby_cols:
-        df[col] = df[col].astype('category')
-
     if as_df:
         return df
     else:
@@ -131,7 +127,7 @@ def aggregate_pa(
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
 
-    df = pa_table.to_pandas(categories=groupby_cols)
+    df = pa_table.to_pandas()
 
     # filter
     if data_filter:
