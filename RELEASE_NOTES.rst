@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.10
+==============
+- Check for filter columns that are not part of the result
+
 Release  0.1.9
 ==============
 - Remove the entire uses of categorical values as they impede concatenation of results

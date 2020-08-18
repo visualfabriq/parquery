@@ -20,17 +20,18 @@ def aggregate_pq(
 
     pq_file = pq.ParquetFile(file_name)
 
+    # check measure_cols
+    measure_cols = check_measure_cols(measure_cols)
+
+    # check which columns we need in total
+    cols = list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter]))
+    result_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
         data_filter = convert_data_filter(data_filter)
     else:
         metadata_filter = None
-
-    # check measure_cols
-    measure_cols = check_measure_cols(measure_cols)
-
-    # check which columns we need in total
-    cols = groupby_cols + [x[0] for x in measure_cols]
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
@@ -65,6 +66,11 @@ def aggregate_pq(
                 del df
                 continue
             df = df[mask]
+
+        # unneeded columns (when we filter on a non-result column)
+        unneeded_columns = [col for col in df if col not in result_cols]
+        if unneeded_columns:
+            df.drop(unneeded_columns, axis=1, inplace=True)
 
         # aggregate
         if aggregate:

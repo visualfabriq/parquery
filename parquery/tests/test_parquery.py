@@ -853,6 +853,58 @@ class TestParquery(object):
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
 
+    def test_where_terms_05(self):
+        """
+        test_where_terms05: get mask where terms in list with a filter on unused column without aggregation
+        """
+
+        include = [0, 1000, 2000]
+
+        # expected result
+        ref = [[x] for x in range(20000) if x in include]
+
+        # generate data to filter on
+        iterable = ((x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8')
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(pd.DataFrame(data), self.filename)
+
+        # filter data
+        terms_filter = [('f0', 'in', include)]
+        result_parquery = aggregate_pq(self.filename, [], ['f1'],
+                                       data_filter=terms_filter,
+                                       aggregate=False)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
+    def test_where_terms_06(self):
+        """
+        test_where_terms06: get mask where terms in list with a filter on unused column with aggregation
+        """
+
+        include = [0, 1000, 2000]
+
+        # expected result
+        ref = [[x] for x in range(20000) if x == 0 + 1000 + 2000]
+
+        # generate data to filter on
+        iterable = ((x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8')
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(pd.DataFrame(data), self.filename)
+
+        # filter data
+        terms_filter = [('f0', 'in', include)]
+        result_parquery = aggregate_pq(self.filename, [], ['f1'],
+                                       data_filter=terms_filter,
+                                       aggregate=False)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
     def test_pa_serialization(self):
         iterable = ((x, x) for x in range(20000))
         data = np.fromiter(iterable, dtype='i8,i8')
