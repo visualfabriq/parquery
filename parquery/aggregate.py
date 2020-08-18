@@ -2,6 +2,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from parquery.tool import df_to_natural_name, df_to_original_name
+
 
 def aggregate_pq(
         file_name,
@@ -59,7 +61,9 @@ def aggregate_pq(
         # filter
         if data_filter:
             # filter based on the given requirements
+            df_to_natural_name(df)
             mask = df.eval(data_filter)
+            df_to_original_name(df)
             if not mask.any():
                 # no values for this rowgroup
                 del sub
@@ -144,7 +148,9 @@ def aggregate_pa(
     # filter
     if data_filter:
         # filter based on the given requirements
+        df_to_natural_name(df)
         mask = df.eval(data_filter)
+        df_to_original_name(df)
         df.drop(df[~mask].index, inplace=True)
 
     # unneeded columns (when we filter on a non-result column)
@@ -184,7 +190,8 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_str = ' and '.join([col + ' ' + sign + ' ' + str(values) for col, sign, values in data_filter])
+    data_filter_str = ' and '.join([col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
+                                    for col, sign, values in data_filter])
     return data_filter_str
 
 

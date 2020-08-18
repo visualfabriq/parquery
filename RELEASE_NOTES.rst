@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.11
+==============
+- Handle non-natural naming ("-" in column names)
+
 Release  0.1.10
 ==============
 - Check for filter columns that are not part of the result

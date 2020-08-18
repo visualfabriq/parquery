@@ -905,6 +905,62 @@ class TestParquery(object):
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
 
+    def test_natural_notation(self):
+        """
+        test_natural_notation: check the handling of difficult naming
+        """
+
+        include = [0, 1000, 2000]
+
+        # expected result
+        ref = [[x, x] for x in range(20000) if x in [0, 1000, 2000]]
+
+        # generate data to filter on
+        iterable = ((x, x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8,i8')
+        df = pd.DataFrame(data)
+        df.columns = ['d-1', 'd-2', 'm-1']
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(df, self.filename)
+
+        # filter data
+        terms_filter = [('d-1', 'in', include)]
+        result_parquery = aggregate_pq(self.filename, ['d-2'], ['m-1'],
+                                       data_filter=terms_filter,
+                                       aggregate=True)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
+    def test_natural_notation_2(self):
+        """
+        test_natural_notation: check the handling of difficult naming without dimensions
+        """
+
+        include = [0, 1000, 2000]
+
+        # expected result
+        ref = [[x] for x in range(20000) if x == 0 + 1000 + 2000]
+
+        # generate data to filter on
+        iterable = ((x, x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8,i8')
+        df = pd.DataFrame(data)
+        df.columns = ['d-1', 'd-2', 'm-1']
+
+        filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(df, filename)
+
+        # filter data
+        terms_filter = [('d-1', 'in', include)]
+        result_parquery = aggregate_pq(filename, [], ['m-1'],
+                                       data_filter=terms_filter,
+                                       aggregate=True)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
     def test_pa_serialization(self):
         iterable = ((x, x) for x in range(20000))
         data = np.fromiter(iterable, dtype='i8,i8')
