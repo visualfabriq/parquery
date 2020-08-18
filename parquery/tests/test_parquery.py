@@ -900,7 +900,7 @@ class TestParquery(object):
         terms_filter = [('f0', 'in', include)]
         result_parquery = aggregate_pq(self.filename, [], ['f1'],
                                        data_filter=terms_filter,
-                                       aggregate=False)
+                                       aggregate=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))

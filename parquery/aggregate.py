@@ -66,7 +66,7 @@ def aggregate_pq(
                 del row_group
                 del df
                 continue
-            df = df[mask]
+            df.drop(df[~mask].index, inplace=True)
 
         # unneeded columns (when we filter on a non-result column)
         unneeded_columns = [col for col in df if col not in result_cols]
@@ -125,11 +125,16 @@ def aggregate_pa(
     NB: we assume that all columns are strings
 
     """
-    if data_filter:
-        data_filter = convert_data_filter(data_filter)
+    data_filter = data_filter or []
 
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
+
+    # check which columns we need in total
+    result_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+
+    if data_filter:
+        data_filter = convert_data_filter(data_filter)
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
@@ -140,7 +145,12 @@ def aggregate_pa(
     if data_filter:
         # filter based on the given requirements
         mask = df.eval(data_filter)
-        df = df[mask]
+        df.drop(df[~mask].index, inplace=True)
+
+    # unneeded columns (when we filter on a non-result column)
+    unneeded_columns = [col for col in df if col not in result_cols]
+    if unneeded_columns:
+        df.drop(unneeded_columns, axis=1, inplace=True)
 
     # aggregate
     if aggregate:
