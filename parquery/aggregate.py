@@ -17,6 +17,7 @@ def aggregate_pq(
     NB: we assume that all columns are strings
 
     """
+    data_filter = data_filter or []
 
     pq_file = pq.ParquetFile(file_name)
 
