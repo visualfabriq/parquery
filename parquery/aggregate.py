@@ -27,8 +27,9 @@ def aggregate_pq(
     measure_cols = check_measure_cols(measure_cols)
 
     # check which columns we need in total
-    cols = list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter]))
-    result_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+    cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter])))
+    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
 
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
@@ -73,7 +74,7 @@ def aggregate_pq(
             df.drop(df[~mask].index, inplace=True)
 
         # unneeded columns (when we filter on a non-result column)
-        unneeded_columns = [col for col in df if col not in result_cols]
+        unneeded_columns = [col for col in df if col not in input_cols]
         if unneeded_columns:
             df.drop(unneeded_columns, axis=1, inplace=True)
 
@@ -108,10 +109,10 @@ def aggregate_pq(
 
     else:
         # empty result
-        df = pd.DataFrame(None, columns=cols)
+        df = pd.DataFrame(None, columns=result_cols)
 
     # ensure order
-    df = df[sorted(df.columns)]
+    df = df[result_cols]
 
     if as_df:
         return df
@@ -138,7 +139,8 @@ def aggregate_pa(
     measure_cols = check_measure_cols(measure_cols)
 
     # check which columns we need in total
-    result_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
 
     if data_filter:
         data_filter = convert_data_filter(data_filter)
@@ -157,7 +159,7 @@ def aggregate_pa(
         df.drop(df[~mask].index, inplace=True)
 
     # unneeded columns (when we filter on a non-result column)
-    unneeded_columns = [col for col in df if col not in result_cols]
+    unneeded_columns = [col for col in df if col not in input_cols]
     if unneeded_columns:
         df.drop(unneeded_columns, axis=1, inplace=True)
 
@@ -166,7 +168,7 @@ def aggregate_pa(
         df = groupby_result(agg, df, groupby_cols, measure_cols)
 
     # ensure order
-    df = df[sorted(df.columns)]
+    df = df[result_cols]
     
     if as_df:
         return df

@@ -2,7 +2,7 @@
 Release notes for parquery
 ========================
 
-Release  0.1.12-13
+Release  0.1.12-14
 ==============
 - Enforce order of columns for partial results
 
