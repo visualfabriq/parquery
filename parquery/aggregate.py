@@ -111,8 +111,7 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=cols)
 
     # ensure order
-    ordered_cols = list(set(groupby_cols + [x[2] for x in measure_cols]))
-    df = df[ordered_cols]
+    df = df[sorted(df.columns)]
 
     if as_df:
         return df
@@ -167,8 +166,7 @@ def aggregate_pa(
         df = groupby_result(agg, df, groupby_cols, measure_cols)
 
     # ensure order
-    ordered_cols = list(set(groupby_cols + [x[2] for x in measure_cols]))
-    df = df[ordered_cols]
+    df = df[sorted(df.columns)]
     
     if as_df:
         return df
