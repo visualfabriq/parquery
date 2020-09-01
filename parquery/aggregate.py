@@ -27,9 +27,7 @@ def aggregate_pq(
     measure_cols = check_measure_cols(measure_cols)
 
     # check which columns we need in total
-    cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter])))
-    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
-    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
+    all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
 
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
@@ -54,7 +52,7 @@ def aggregate_pq(
                 continue
 
         # get data into df
-        sub = pq_file.read_row_group(row_group, columns=cols)
+        sub = pq_file.read_row_group(row_group, columns=all_cols)
         df = sub.to_pandas()
         if df.empty:
             continue
@@ -62,16 +60,13 @@ def aggregate_pq(
         # filter
         if data_filter:
             # filter based on the given requirements
-            df_to_natural_name(df)
-            mask = df.eval(data_filter)
-            df_to_original_name(df)
-            if not mask.any():
+            apply_data_filter(data_filter, df)
+            if df.empty:
                 # no values for this rowgroup
                 del sub
                 del row_group
                 del df
                 continue
-            df.drop(df[~mask].index, inplace=True)
 
         # unneeded columns (when we filter on a non-result column)
         unneeded_columns = [col for col in df if col not in input_cols]
@@ -139,24 +134,19 @@ def aggregate_pa(
     measure_cols = check_measure_cols(measure_cols)
 
     # check which columns we need in total
-    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
-    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
-
-    if data_filter:
-        data_filter = convert_data_filter(data_filter)
-
-    # create pandas-compliant aggregation
-    agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+    _, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
 
     df = pa_table.to_pandas()
 
     # filter
     if data_filter:
         # filter based on the given requirements
-        df_to_natural_name(df)
-        mask = df.eval(data_filter)
-        df_to_original_name(df)
-        df.drop(df[~mask].index, inplace=True)
+        data_filter = convert_data_filter(data_filter)
+        apply_data_filter(data_filter, df)
+
+    # check if we have a result still
+    if df.empty:
+        return pd.DataFrame(None, columns=result_cols)
 
     # unneeded columns (when we filter on a non-result column)
     unneeded_columns = [col for col in df if col not in input_cols]
@@ -165,15 +155,28 @@ def aggregate_pa(
 
     # aggregate
     if aggregate:
+        # create pandas-compliant aggregation
+        agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+        # aggregate
         df = groupby_result(agg, df, groupby_cols, measure_cols)
+
+    # rename the columns
+    df = df.rename(columns={x[0]: x[2] for x in measure_cols})
 
     # ensure order
     df = df[result_cols]
-    
+
     if as_df:
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def apply_data_filter(data_filter, df):
+    df_to_natural_name(df)
+    mask = df.eval(data_filter)
+    df_to_original_name(df)
+    df.drop(df[~mask].index, inplace=True)
 
 
 def groupby_result(agg, df, groupby_cols, measure_cols):
@@ -257,3 +260,10 @@ def check_measure_cols(measure_cols):
             # assume the same column name if not specified
             agg_ops.append(agg_ops[0])
     return measure_cols
+
+
+def get_cols(data_filter, groupby_cols, measure_cols):
+    all_cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter])))
+    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
+    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
+    return all_cols, input_cols, result_cols
