@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.12
+==============
+- Enforce order of columns for partial results
+
 Release  0.1.11
 ==============
 - Handle non-natural naming ("-" in column names)

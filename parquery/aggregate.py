@@ -110,6 +110,10 @@ def aggregate_pq(
         # empty result
         df = pd.DataFrame(None, columns=cols)
 
+    # ensure order
+    ordered_cols = list(set(groupby_cols + [x[2] for x in measure_cols]))
+    df = df[ordered_cols]
+
     if as_df:
         return df
     else:
@@ -162,6 +166,10 @@ def aggregate_pa(
     if aggregate:
         df = groupby_result(agg, df, groupby_cols, measure_cols)
 
+    # ensure order
+    ordered_cols = list(set(groupby_cols + [x[2] for x in measure_cols]))
+    df = df[ordered_cols]
+    
     if as_df:
         return df
     else:
