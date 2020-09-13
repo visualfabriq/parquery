@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.1.16
+==============
+- Handle count by aggregated results
+
 Release  0.1.12-15
 ==============
 - Enforce order of columns for partial results

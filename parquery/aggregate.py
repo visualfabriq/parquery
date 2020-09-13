@@ -94,7 +94,7 @@ def aggregate_pq(
         else:
             df = pd.concat(result, ignore_index=True, sort=False)
             if aggregate:
-                df = groupby_result(agg, df, groupby_cols, measure_cols)
+                df = groupby_result(agg, df, groupby_cols, measure_cols, combine_results=True)
 
         if row_group_filter is not None:
             df = df.rename(columns={x[0]: x[2] for x in measure_cols})
@@ -179,7 +179,15 @@ def apply_data_filter(data_filter, df):
     df.drop(df[~mask].index, inplace=True)
 
 
-def groupby_result(agg, df, groupby_cols, measure_cols):
+def groupby_result(agg, df, groupby_cols, measure_cols, combine_results=False):
+    if not agg:
+        return df.drop_duplicates()
+
+    if combine_results:
+        # we handle opps
+        for opp in ['count', 'nunique', 'count_distinct']:
+            agg = {k: v.replace(opp, 'sum') for k, v in agg.items()}
+
     if groupby_cols:
         df = df.groupby(groupby_cols, as_index=False).agg(agg)
     else:
