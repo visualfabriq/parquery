@@ -4,6 +4,7 @@ import pyarrow.parquet as pq
 
 from parquery.tool import df_to_natural_name, df_to_original_name
 
+FILTER_CUTOVER_LENGTH = 10
 
 def aggregate_pq(
         file_name,
@@ -31,7 +32,7 @@ def aggregate_pq(
 
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter = convert_data_filter(data_filter)
+        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
     else:
         metadata_filter = None
 
@@ -60,7 +61,7 @@ def aggregate_pq(
         # filter
         if data_filter:
             # filter based on the given requirements
-            apply_data_filter(data_filter, df)
+            apply_data_filter(data_filter_str, data_filter_sets, df)
             if df.empty:
                 # no values for this rowgroup
                 del sub
@@ -72,10 +73,6 @@ def aggregate_pq(
         unneeded_columns = [col for col in df if col not in input_cols]
         if unneeded_columns:
             df.drop(unneeded_columns, axis=1, inplace=True)
-
-        # aggregate
-        if aggregate:
-            df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         # save the result
         result.append(df)
@@ -92,9 +89,10 @@ def aggregate_pq(
         if len(result) == 1:
             df = result[0]
         else:
-            df = pd.concat(result, ignore_index=True, sort=False)
-            if aggregate:
-                df = groupby_result(agg, df, groupby_cols, measure_cols, combine_results=True)
+            df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
+
+        if aggregate:
+            df = groupby_result(agg, df, groupby_cols, measure_cols, combine_results=True)
 
         if row_group_filter is not None:
             df = df.rename(columns={x[0]: x[2] for x in measure_cols})
@@ -141,8 +139,8 @@ def aggregate_pa(
     # filter
     if data_filter:
         # filter based on the given requirements
-        data_filter = convert_data_filter(data_filter)
-        apply_data_filter(data_filter, df)
+        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
+        apply_data_filter(data_filter_str, data_filter_sets, df)
 
     # check if we have a result still
     if df.empty:
@@ -172,11 +170,25 @@ def aggregate_pa(
         return pa.Table.from_pandas(df, preserve_index=False)
 
 
-def apply_data_filter(data_filter, df):
-    df_to_natural_name(df)
-    mask = df.eval(data_filter)
-    df_to_original_name(df)
-    df.drop(df[~mask].index, inplace=True)
+def apply_data_filter(data_filter_str, data_filter_set, df):
+    # filter on the straight eval
+    if data_filter_str:
+        df_to_natural_name(df)
+        mask = df.eval(data_filter_str)
+        df_to_original_name(df)
+        df.drop(df[~mask].index, inplace=True)
+
+    # filter on each longer list
+    if data_filter_set:
+        for col, sign, values in data_filter_set:
+            if sign == 'in':
+                mask = df[col].isin(values)
+                df.drop(df[~mask].index, inplace=True)
+            elif sign in ['not in', 'nin']:
+                mask = df[col].isin(values)
+                df.drop(df[mask].index, inplace=True)
+            else:
+                raise NotImplementError('Unknown sign for set filter {}'.format(sign))
 
 
 def groupby_result(agg, df, groupby_cols, measure_cols, combine_results=False):
@@ -209,9 +221,12 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_str = ' and '.join([col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
-                                    for col, sign, values in data_filter])
-    return data_filter_str
+    data_filter_str = ' and '.join([
+        col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
+        for col, sign, values in data_filter if not (isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH)])
+    data_filter_sets = [(col, sign, set(values)) for col, sign, values in data_filter
+                        if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH]
+    return data_filter_str, data_filter_sets
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
