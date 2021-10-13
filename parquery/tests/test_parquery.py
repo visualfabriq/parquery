@@ -179,13 +179,9 @@ class TestParquery(object):
         uniquekeys = result_itt['uniquekeys']
         print(uniquekeys)
 
-        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
-        for col in result_ref.columns:
-            if result_ref[col].dtype == np.float64:
-                result_ref[col] = np.round(result_ref[col], 6)
-                result_parquery[col] = np.round(result_parquery[col], 6)
-
-        assert (result_parquery == result_ref).all().all()
+        assert all(
+            a == b for a, b in zip([[x['f0'], x['f1'], x['f2']] for _, x in result_parquery.iterrows()],
+                                   uniquekeys))
 
     def test_groupby_03(self):
         """
@@ -284,8 +280,13 @@ class TestParquery(object):
                 f6 += row[6]
             ref.append(f0 + [f4, f5, f6])
 
-        check = ((a, b) for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
-        assert all(a == b for a, b in check)
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_05(self):
         """
