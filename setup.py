@@ -45,8 +45,8 @@ install_requires = []
 setup_requires = []
 tests_requires = ['pytest']
 if v < (3,):
-    install_requires.extend(['pyarrow==0.17', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
-    setup_requires.extend(['pyarrow==0.17', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
+    install_requires.extend(['pyarrow==0.16', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
+    setup_requires.extend(['pyarrow==0.16', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
 else:
     install_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
     setup_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
