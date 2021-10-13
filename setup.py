@@ -41,15 +41,15 @@ def get_version():
 # Sources & libraries
 sources = []
 optional_libs = []
-install_requires = ['numexpr']
-setup_requires = ['numexpr']
+install_requires = []
+setup_requires = []
 tests_requires = ['pytest']
 if v < (3,):
-    install_requires.extend(['pyarrow<0.17', 'pandas<0.25', 'numpy<1.17'])
-    setup_requires.extend(['pyarrow<0.17', 'pandas<0.25', 'numpy<1.17'])
+    install_requires.extend(['pyarrow==0.17', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
+    setup_requires.extend(['pyarrow==0.17', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
 else:
-    install_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1'])
-    setup_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1'])
+    install_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
+    setup_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
 
 extras_requires = []
 
@@ -69,8 +69,6 @@ classifiers = [
     'Programming Language :: Python :: 2',
     'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.5',
-    'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
