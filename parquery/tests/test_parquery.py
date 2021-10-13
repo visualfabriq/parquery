@@ -951,6 +951,34 @@ class TestParquery(object):
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
 
+    def test_where_terms07(self):
+        """
+        test_where_terms07: get mask on where terms in a very long list
+        """
+        include = [0, 1, 2, 3, 11, 12, 13]
+
+        # expected result
+        ref = [[x, x] for x in range(20000) if x in include]
+
+        # we do not have to make unique values, just a very long include to ensure we use the set logic
+        include *= 100
+
+        # generate data to filter on
+        iterable = ((x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8')
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(pd.DataFrame(data), self.filename)
+
+        # filter data
+        terms_filter = [('f0', 'in', include)]
+        result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
+                                       data_filter=terms_filter,
+                                       aggregate=False)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
     def test_natural_notation(self):
         """
         test_natural_notation: check the handling of difficult naming
