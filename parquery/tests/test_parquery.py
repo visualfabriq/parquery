@@ -338,7 +338,13 @@ class TestParquery(object):
                     f1 += row[1]
                 ref.append([f0] + [f1])
 
-            assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+            result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+            for col in result_ref.columns:
+                if result_ref[col].dtype == np.float64:
+                    result_ref[col] = np.round(result_ref[col], 6)
+                    result_parquery[col] = np.round(result_parquery[col], 6)
+
+            assert (result_parquery == result_ref).all().all()
 
     def test_groupby_06(self):
         """
@@ -381,7 +387,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_07(self):
         """
@@ -425,7 +437,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def _get_unique(self, values):
         new_values = []
@@ -543,7 +561,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_09(self):
         """
@@ -622,7 +646,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_10(self):
         """
@@ -917,6 +947,34 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, [], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=True)
+
+        # compare
+        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+
+    def test_where_terms07(self):
+        """
+        test_where_terms07: get mask on where terms in a very long list
+        """
+        include = [0, 1, 2, 3, 11, 12, 13]
+
+        # expected result
+        ref = [[x, x] for x in range(20000) if x in include]
+
+        # we do not have to make unique values, just a very long include to ensure we use the set logic
+        include *= 100
+
+        # generate data to filter on
+        iterable = ((x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8')
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(pd.DataFrame(data), self.filename)
+
+        # filter data
+        terms_filter = [('f0', 'in', include)]
+        result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
+                                       data_filter=terms_filter,
+                                       aggregate=False)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
