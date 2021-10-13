@@ -9,7 +9,7 @@ jobs:
       - checkout:
       - run:
           name: Install Requirements
-          command: sudo pip install -r requirements.txt
+          command: pip install -r requirements.txt
       - run:
           name: Install Module
           command: python setup.py build_ext --inplace && sudo python setup.py install
@@ -30,9 +30,11 @@ jobs:
     steps:
       - checkout:
       - run:
+          name: Update pip
+          command: pip install -U pip
+      - run:
           name: Install Requirements
-          command: sudo pip install -U pip
-          command: sudo pip install -r requirements.txt
+          command: pip install -r requirements.txt
       - run:
           name: Install Module
           command: python setup.py build_ext --inplace && sudo python setup.py install
