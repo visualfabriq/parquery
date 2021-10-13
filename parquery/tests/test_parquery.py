@@ -338,7 +338,13 @@ class TestParquery(object):
                     f1 += row[1]
                 ref.append([f0] + [f1])
 
-            assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+            result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+            for col in result_ref.columns:
+                if result_ref[col].dtype == np.float64:
+                    result_ref[col] = np.round(result_ref[col], 6)
+                    result_parquery[col] = np.round(result_parquery[col], 6)
+
+            assert (result_parquery == result_ref).all().all()
 
     def test_groupby_06(self):
         """
@@ -381,7 +387,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_07(self):
         """
@@ -425,7 +437,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def _get_unique(self, values):
         new_values = []
@@ -543,7 +561,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_09(self):
         """
@@ -622,7 +646,13 @@ class TestParquery(object):
                 f6 += 1
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_10(self):
         """

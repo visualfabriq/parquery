@@ -6,6 +6,7 @@ Release  0.2.0
 ==============
 - Improve performance for complex list filters
 - Improve performance by only aggregating end result (at the cost of some memory efficiency)
+- Fixed circleci python 3 tests (rounding and pip versioning)
 
 Release  0.1.16
 ==============
