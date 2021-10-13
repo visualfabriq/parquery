@@ -31,6 +31,7 @@ jobs:
       - checkout:
       - run:
           name: Install Requirements
+          command: sudo pip install -U pip
           command: sudo pip install -r requirements.txt
       - run:
           name: Install Module
