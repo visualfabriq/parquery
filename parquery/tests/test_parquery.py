@@ -33,7 +33,8 @@ class TestParquery(object):
             os.remove(self.filename)
             self.filename = None
 
-    def gen_dataset_count(self, N):
+    @staticmethod
+    def gen_dataset_count(N):
         pool = itt.cycle(['a', 'a',
                           'b', 'b', 'b',
                           'c', 'c', 'c', 'c', 'c'])
@@ -54,7 +55,8 @@ class TestParquery(object):
             )
             yield d
 
-    def gen_dataset_count_with_NA(self, N):
+    @staticmethod
+    def gen_dataset_count_with_NA(N):
         pool = itt.cycle(['a', 'a',
                           'b', 'b', 'b',
                           'c', 'c', 'c', 'c', 'c'])
@@ -78,7 +80,8 @@ class TestParquery(object):
             )
             yield d
 
-    def gen_almost_unique_row(self, N):
+    @staticmethod
+    def gen_almost_unique_row(N):
         pool = itt.cycle(['a', 'b', 'c', 'd', 'e'])
         pool_b = itt.cycle([1.1, 1.2])
         pool_c = itt.cycle([1, 2, 3])
@@ -95,7 +98,8 @@ class TestParquery(object):
             )
             yield d
 
-    def helper_itt_groupby(self, data, keyfunc):
+    @staticmethod
+    def helper_itt_groupby(data, keyfunc):
         groups = []
         uniquekeys = []
         data = sorted(data,
@@ -175,9 +179,13 @@ class TestParquery(object):
         uniquekeys = result_itt['uniquekeys']
         print(uniquekeys)
 
-        assert all(
-            a == b for a, b in zip([[x['f0'], x['f1'], x['f2']] for _, x in result_parquery.iterrows()],
-                                   uniquekeys))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_03(self):
         """
@@ -223,7 +231,13 @@ class TestParquery(object):
                 f6 += row[6]
             ref.append([f0, f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
+        for col in result_ref.columns:
+            if result_ref[col].dtype == np.float64:
+                result_ref[col] = np.round(result_ref[col], 6)
+                result_parquery[col] = np.round(result_parquery[col], 6)
+
+        assert (result_parquery == result_ref).all().all()
 
     def test_groupby_04(self):
         """
@@ -270,7 +284,8 @@ class TestParquery(object):
                 f6 += row[6]
             ref.append(f0 + [f4, f5, f6])
 
-        assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        check = ((a, b) for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
+        assert all(a == b for a, b in check)
 
     def test_groupby_05(self):
         """
