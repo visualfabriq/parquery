@@ -18,7 +18,7 @@ from setuptools import setup, find_packages
 
 # Check this Python version is supported
 if any([v < (2, 6), (3,) < v < (3, 5)]):
-    raise Exception("Unsupported Python version %d.%d. Requires Python >= 2.7 "
+    raise Exception("Unsupported Python version %d.%d. Requires Python == 2.7 "
                     "or >= 3.5." % v[:2])
 
 HERE = os.path.abspath(os.path.dirname(__file__))
@@ -45,11 +45,11 @@ install_requires = []
 setup_requires = []
 tests_requires = ['pytest']
 if v < (3,):
-    install_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.1'])
-    setup_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.1'])
+    install_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
+    setup_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
 else:
-    install_requires.extend(['pyarrow>=1.0.0', 'pandas>=1.1.0', 'numpy>=1.19.1', 'numexpr>=2.7.1'])
-    setup_requires.extend(['pyarrow>=1.0.0', 'pandas>=1.1.0', 'numpy>=1.19.1', 'numexpr>=2.7.1'])
+    install_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
+    setup_requires.extend(['pyarrow>=1', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
 
 extras_requires = []
 
@@ -69,8 +69,6 @@ classifiers = [
     'Programming Language :: Python :: 2',
     'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.5',
-    'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
