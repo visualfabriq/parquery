@@ -2,7 +2,7 @@
 Release notes for parquery
 ========================
 
-Release  0.2.1
+Release  0.2.1, 0.2.2
 ==============
 - Align requirements over requirements.txt, pyproyect.toml and setup.py
 

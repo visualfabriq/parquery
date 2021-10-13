@@ -4,7 +4,7 @@ requires = [
   "setuptools",
   "wheel",
   "pyarrow==0.17; python_version>='3.7'",
-  "pyarrow>=1; python_version>='3.7",
+  "pyarrow>=1; python_version>='3.7'",
   "pandas==0.24.2; python_version=='2.7'",
   "pandas>=1.1; python_version>='3.7'",
   "numpy==1.16.6; python_version=='2.7'",
