@@ -92,7 +92,7 @@ def aggregate_pq(
             df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
 
         if aggregate:
-            df = groupby_result(agg, df, groupby_cols, measure_cols, combine_results=True)
+            df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         if row_group_filter is not None:
             df = df.rename(columns={x[0]: x[2] for x in measure_cols})
@@ -191,14 +191,9 @@ def apply_data_filter(data_filter_str, data_filter_set, df):
                 raise NotImplementError('Unknown sign for set filter {}'.format(sign))
 
 
-def groupby_result(agg, df, groupby_cols, measure_cols, combine_results=False):
+def groupby_result(agg, df, groupby_cols, measure_cols):
     if not agg:
         return df.drop_duplicates()
-
-    if combine_results:
-        # we handle opps
-        for opp in ['count', 'nunique', 'count_distinct']:
-            agg = {k: v.replace(opp, 'sum') for k, v in agg.items()}
 
     if groupby_cols:
         df = df.groupby(groupby_cols, as_index=False).agg(agg)
