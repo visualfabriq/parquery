@@ -30,6 +30,9 @@ jobs:
     steps:
       - checkout:
       - run:
+          name: Update pip
+          command: sudo pip install -U pip
+      - run:
           name: Install Requirements
           command: sudo pip install -r requirements.txt
       - run:
