@@ -188,7 +188,7 @@ def apply_data_filter(data_filter_str, data_filter_set, df):
                 mask = df[col].isin(values)
                 df.drop(df[mask].index, inplace=True)
             else:
-                raise NotImplementError('Unknown sign for set filter {}'.format(sign))
+                raise NotImplementedError('Unknown sign for set filter {}'.format(sign))
 
 
 def groupby_result(agg, df, groupby_cols, measure_cols):
