@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.2.1
+==============
+- Align requirements over requirements.txt, pyproyect.toml and setup.py
+
 Release  0.2.0
 ==============
 - Improve performance for complex list filters
