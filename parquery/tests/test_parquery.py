@@ -1035,6 +1035,30 @@ class TestParquery(object):
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
 
+    def test_non_existing_column(self):
+        """
+        test_non_existing_column: check the handling of missing columns in the parquet file
+        measure columns should get 0.0 as value
+        dimension columns should get the default -1 (unknown) identifier
+        """
+        # generate data to filter on
+        iterable = ((x, x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8,i8')
+        df = pd.DataFrame(data)
+        df.columns = ['d1', 'd2', 'm1']
+
+        filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(df, filename)
+
+        # filter data
+        result_parquery = aggregate_pq(filename, ['d1', 'd3'], ['m1', 'm2'],
+                                       data_filter=[],
+                                       aggregate=True)
+
+        # compare
+        assert result_parquery['m2'].sum() == 0.0
+        assert list(result_parquery['d3'].unique()) == [-1]
+
     def test_pa_serialization(self):
         iterable = ((x, x) for x in range(20000))
         data = np.fromiter(iterable, dtype='i8,i8')

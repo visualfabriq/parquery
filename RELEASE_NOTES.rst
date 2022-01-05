@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.2.5
+==============
+- Handle the request for non-existing columns in a parquet file
+
 Release  0.2.1, 0.2.2, 0.2.3, 0.2.4
 ==============
 - Align requirements over requirements.txt, pyproyect.toml and setup.py

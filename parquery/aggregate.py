@@ -14,6 +14,7 @@ def aggregate_pq(
         aggregate=True,
         row_group_filter=None,
         as_df=True,
+        standard_missing_id=-1,
         debug=False):
     """
     A function to aggregate a parquetfile using pandas
@@ -35,6 +36,8 @@ def aggregate_pq(
         data_filter_str, data_filter_sets = convert_data_filter(data_filter)
     else:
         metadata_filter = None
+        data_filter_str = None
+        data_filter_sets = None
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
@@ -57,6 +60,9 @@ def aggregate_pq(
         df = sub.to_pandas()
         if df.empty:
             continue
+
+        # add missing requested columns
+        add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug)
 
         # filter
         if data_filter:
@@ -111,6 +117,23 @@ def aggregate_pq(
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug):
+    expected_measure_cols = [x[0] for x in measure_cols]
+
+    for col in all_cols:
+        if col not in df:
+            if col in expected_measure_cols:
+                # missing measure columns get a 0.0 result
+                standard_value = 0.0
+            else:
+                # missing dimension columns get the standard id for missing values
+                standard_value = standard_missing_id
+
+            if debug:
+                print('Adding missing column {} with standard value {}'.format(col, standard_value))
+            df[col] = standard_value
 
 
 def aggregate_pa(
