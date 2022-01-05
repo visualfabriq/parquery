@@ -62,18 +62,7 @@ def aggregate_pq(
             continue
 
         # add missing requested columns
-        for col in all_cols:
-            if col not in df:
-                if col in measure_cols:
-                    # missing measure columns get a 0.0 result
-                    standard_value = 0.0
-                else:
-                    # missing dimension columns get the standard id for missing values
-                    standard_value = standard_missing_id
-
-                if debug:
-                    print('Adding missing column {} with standard value {}'.format(col, standard_value))
-                df[col] = standard_value
+        add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug)
 
         # filter
         if data_filter:
@@ -128,6 +117,23 @@ def aggregate_pq(
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug):
+    expected_measure_cols = [x[0] for x in measure_cols]
+
+    for col in all_cols:
+        if col not in df:
+            if col in expected_measure_cols:
+                # missing measure columns get a 0.0 result
+                standard_value = 0.0
+            else:
+                # missing dimension columns get the standard id for missing values
+                standard_value = standard_missing_id
+
+            if debug:
+                print('Adding missing column {} with standard value {}'.format(col, standard_value))
+            df[col] = standard_value
 
 
 def aggregate_pa(
