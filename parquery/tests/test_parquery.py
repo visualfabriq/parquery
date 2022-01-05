@@ -1051,7 +1051,7 @@ class TestParquery(object):
         df_to_parquet(df, filename)
 
         # filter data
-        result_parquery = aggregate_pq(filename, ['d3'], ['m2'],
+        result_parquery = aggregate_pq(filename, ['d1', 'd3'], ['m1', 'm2'],
                                        data_filter=[],
                                        aggregate=True)
 
