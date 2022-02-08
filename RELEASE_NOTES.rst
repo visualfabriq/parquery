@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.2.6
+==============
+- Add a parameter to handle default response when a parquet file is missing
+
 Release  0.2.5
 ==============
 - Handle the request for non-existing columns in a parquet file

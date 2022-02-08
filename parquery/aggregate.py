@@ -15,6 +15,7 @@ def aggregate_pq(
         row_group_filter=None,
         as_df=True,
         standard_missing_id=-1,
+        handle_missing_file=True,
         debug=False):
     """
     A function to aggregate a parquetfile using pandas
@@ -23,14 +24,13 @@ def aggregate_pq(
     """
     data_filter = data_filter or []
 
-    pq_file = pq.ParquetFile(file_name)
-
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
 
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
 
+    # check filters
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
         data_filter_str, data_filter_sets = convert_data_filter(data_filter)
@@ -42,7 +42,17 @@ def aggregate_pq(
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
 
+    # if the file does not exist, give back an empty result
+    if not os.exists(file_name) and handle_missing_file:
+        df = pd.DataFrame(None, columns=result_cols)
+        if as_df:
+            return df
+        else:
+            return pa.Table.from_pandas(df, preserve_index=False)
+
     # get result
+    pq_file = pq.ParquetFile(file_name)
+
     num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
     result = []
     for row_group in num_row_groups:
