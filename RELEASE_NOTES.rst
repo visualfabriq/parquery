@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.2.7, 0.2.8
+==============
+- Fix an import issue
+
 Release  0.2.6
 ==============
 - Add a parameter to handle default response when a parquet file is missing
