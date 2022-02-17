@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -5,6 +6,7 @@ import pyarrow.parquet as pq
 from parquery.tool import df_to_natural_name, df_to_original_name
 
 FILTER_CUTOVER_LENGTH = 10
+
 
 def aggregate_pq(
         file_name,
@@ -30,15 +32,6 @@ def aggregate_pq(
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
 
-    # check filters
-    if data_filter:
-        metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
-    else:
-        metadata_filter = None
-        data_filter_str = None
-        data_filter_sets = None
-
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
 
@@ -52,6 +45,15 @@ def aggregate_pq(
 
     # get result
     pq_file = pq.ParquetFile(file_name)
+
+    # check filters
+    if data_filter:
+        metadata_filter = convert_metadata_filter(data_filter, pq_file)
+        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
+    else:
+        metadata_filter = None
+        data_filter_str = None
+        data_filter_sets = None
 
     num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
     result = []
