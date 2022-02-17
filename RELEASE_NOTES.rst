@@ -2,7 +2,7 @@
 Release notes for parquery
 ========================
 
-Release  0.2.7
+Release  0.2.7, 0.2.8
 ==============
 - Fix an import issue
 

@@ -36,7 +36,7 @@ def aggregate_pq(
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
 
     # if the file does not exist, give back an empty result
-    if not os.exists(file_name) and handle_missing_file:
+    if not os.path.exists(file_name) and handle_missing_file:
         df = pd.DataFrame(None, columns=result_cols)
         if as_df:
             return df
