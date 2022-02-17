@@ -1059,6 +1059,22 @@ class TestParquery(object):
         assert result_parquery['m2'].sum() == 0.0
         assert list(result_parquery['d3'].unique()) == [-1]
 
+    def test_non_existing_file(self):
+        """
+        test_non_existing_file: check the handling of missing files
+        measure columns should get 0.0 as value
+        dimension columns should get the default -1 (unknown) identifier
+        """
+        # generate data to filter on
+
+        # filter data
+        result_parquery = aggregate_pq('not_existing_file.$$$', ['d1', 'd3'], ['m1', 'm2'],
+                                       data_filter=[],
+                                       aggregate=True)
+
+        # compare
+        assert result_parquery == pd.DataFrame([], columns= ['d1', 'd3', 'm1', 'm2'])
+
     def test_pa_serialization(self):
         iterable = ((x, x) for x in range(20000))
         data = np.fromiter(iterable, dtype='i8,i8')
