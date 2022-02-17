@@ -1074,7 +1074,7 @@ class TestParquery(object):
 
         # compare
         assert result_parquery.empty is True
-        assert result_parquery.columns == ['d1', 'd3', 'm1', 'm2']
+        assert sorted(list(result_parquery.columns)) == ['d1', 'd3', 'm1', 'm2']
 
     def test_pa_serialization(self):
         iterable = ((x, x) for x in range(20000))
