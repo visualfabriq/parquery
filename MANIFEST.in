@@ -1,3 +1,3 @@
-include *.txt *.rst *.md *.png setup.py MANIFEST.in LICENSE VERSION
+include *.txt *.rst *.md *.png setup.py MANIFEST.in LICENSE
 recursive-include parquery *.py *.pyx *.pxd *.c *.h
 recursive-include parquery/tests *.py

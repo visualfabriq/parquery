@@ -33,11 +33,6 @@ def read(*parts):
         return f.read()
 
 
-def get_version():
-    with codecs.open(abspath('VERSION'), "r", "utf-8") as f:
-        return f.readline().rstrip('\n')
-
-
 # Sources & libraries
 sources = []
 optional_libs = []
@@ -76,7 +71,6 @@ classifiers = [
 
 setup(
     name="parquery",
-    version=get_version(),
     description='A query and aggregation framework for Parquet',
     long_description=read("README.md"),
     long_description_content_type='text/markdown',
