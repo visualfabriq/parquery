@@ -126,5 +126,19 @@ workflows:
               only:
                 - master
     jobs:
-      - py2
-      - py3
+      - test:
+          name: py2
+          runtime: "2.7"
+      - test:
+          name: py3
+          with-coverage: true
+      - build-and-push:
+          context: codeartifact-dev
+          requires:
+            - py2
+            - py3
+          filters:
+            branches:
+              only:
+                - master
+                - main
