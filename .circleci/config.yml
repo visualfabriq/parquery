@@ -1,58 +1,123 @@
-version: 2
+version: 2.1
+orbs:
+  codeartifact: visualfabriq/codeartifact@1.0.0
+  coverage-reporter: codacy/coverage-reporter@13.6.0
+
 jobs:
   build27:
+    executor: codeartifact/default
+    parameters:
+      with-coverage:
+        description: Coverage reporting flag
+        type: boolean
+        default: false
+      runtime:
+        description: Python runtime version
+        type: string
+        default: "3.7"
     docker:
-      - image: circleci/python:2.7
+      - image: cimg/python:<<parameters.runtime>>
 
     working_directory: ~/parquery
     steps:
-      - checkout:
+      - checkout
       - run:
-          name: Install Requirements
-          command: sudo pip install -r requirements.txt
-      - run:
-          name: Install Module
-          command: python setup.py build_ext --inplace && sudo python setup.py install
-      - run:
-          name: Run Tests
-          command: pytest -vs parquery/tests/ --junitxml=test-results/pytest/pytest-report.xml
-      - store_test_results:
-          path: test-results
-      - store_artifacts:
-          path: test-results
-          destination: tr1
+          name: Activate virtualenv
+          command: virtualenv ~/venv
 
-  build3:
-    docker:
-      - image: circleci/python:3.7.1
+      - restore_cache:
+          keys:
+            - << parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
+            - << parameters.runtime >>-v1-dependecies
 
-    working_directory: ~/parquery
+      - codeartifact/init:
+          tool: pip
+
+      - run:
+          name: Install dependencies
+          command: |
+            ~/venv/bin/pip install .[test]
+
+            # Install metadata repository
+            cd ~/project
+            pip install -e .[test]
+
+      # Save the cached dependencies
+      - save_cache:
+          key: << parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
+          paths:
+            - ~/venv
+
+      # Save git revision info
+      - run:
+          name: save GIT revision info
+          command: |
+            git rev-parse HEAD > git_hash.txt
+
+      - run:
+          name: set variables
+          command: |
+            # Enable debug mode
+            export LOG_LEVEL=debug
+
+      - when:
+          condition:
+            not: << parameters.with-coverage >>
+          steps:
+            - run:
+                name: Run tests
+                command: ~/venv/bin/python -m pytest tests
+      - when:
+          condition: << parameters.with-coverage >>
+          steps:
+            - run:
+                name: Run tests with coverage reporting
+                command: |
+                  ~/venv/bin/python -m coverage run -m \
+                    pytest tests --junitxml=test-results/pytest/pytest-report.xml
+                  ~/venv/bin/python -m coverage xml -o cobertura.xml
+            - store_test_results:
+                path: test-results
+            - store_artifacts:
+                path: test-results
+            - coverage-reporter/send_report
+
+  build-and-push:
+    executor: codeartifact/default
     steps:
-      - checkout:
+      - checkout
+      - codeartifact/init:
+          tool: pip
       - run:
-          name: Update pip
-          command: sudo pip install -U pip
-      - run:
-          name: Install Requirements
-          command: sudo pip install -r requirements.txt
-      - run:
-          name: Install Module
-          command: python setup.py build_ext --inplace && sudo python setup.py install
-      - run:
-          name: Run Tests
-          command: pytest -vs parquery/tests/ --junitxml=test-results/pytest/pytest-report.xml
-      - store_test_results:
-          path: test-results
-      - store_artifacts:
-          path: test-results
-          destination: tr1
+          name: Build
+          command: |
+            pip install build
+            python -m build
+      - codeartifact/push:
+          tool: twine
 
 workflows:
-  version: 2
-  build-and-test:
+  version: 2.1
+  main:
     jobs:
-      - build27
-      - build3
+      - test:
+          context: codeartifact-dev
+          name: py2
+          runtime: "2.7"
+      - test:
+          context: codeartifact-dev
+          name: py37
+          with-coverage: true
+      - build-and-push:
+          context: codeartifact-dev
+          requires:
+            - py2
+            - py37
+          filters:
+            branches:
+              only:
+                - master
+                - main
 
   daily:
     triggers:
@@ -63,5 +128,5 @@ workflows:
               only:
                 - master
     jobs:
-      - build27
-      - build3
+      - py2
+      - py37
