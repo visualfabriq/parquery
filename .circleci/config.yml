@@ -98,25 +98,24 @@ jobs:
 
 workflows:
   version: 2.1
-  main:
+  build-and-test:
     jobs:
       - test:
-          context: codeartifact-dev
           name: py2
           runtime: "2.7"
       - test:
-          context: codeartifact-dev
-          name: py37
+          name: py3
           with-coverage: true
       - build-and-push:
           context: codeartifact-dev
           requires:
             - py2
-            - py37
+            - py3
           filters:
             branches:
               only:
                 - master
+                - main
 
   daily:
     triggers:
@@ -128,4 +127,4 @@ workflows:
                 - master
     jobs:
       - py2
-      - py37
+      - py3
