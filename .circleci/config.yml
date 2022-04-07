@@ -4,7 +4,7 @@ orbs:
   coverage-reporter: codacy/coverage-reporter@13.6.0
 
 jobs:
-  build27:
+  test:
     executor: codeartifact/default
     parameters:
       with-coverage:
