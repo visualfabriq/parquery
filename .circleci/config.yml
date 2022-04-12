@@ -63,7 +63,7 @@ jobs:
           steps:
             - run:
                 name: Run tests
-                command: ~/venv/bin/python -m pytest tests
+                command: ~/venv/bin/python -m pytest parquery/tests
       - when:
           condition: << parameters.with-coverage >>
           steps:
