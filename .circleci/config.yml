@@ -38,9 +38,6 @@ jobs:
           command: |
             ~/venv/bin/pip install .[test]
 
-            # Install metadata repository
-            cd ~/project
-            pip install -e .[test]
 
       # Save the cached dependencies
       - save_cache:
