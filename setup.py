@@ -38,7 +38,7 @@ sources = []
 optional_libs = []
 install_requires = []
 setup_requires = []
-tests_requires = ['pytest']
+tests_requires = ['pytest', 'coverage']
 if v < (3,):
     install_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
     setup_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
