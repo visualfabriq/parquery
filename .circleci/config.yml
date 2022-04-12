@@ -101,9 +101,11 @@ workflows:
   build-and-test:
     jobs:
       - test:
+          context: codeartifact-dev
           name: py2
           runtime: "2.7"
       - test:
+          context: codeartifact-dev
           name: py3
           with-coverage: true
       - build-and-push:
@@ -127,9 +129,11 @@ workflows:
                 - master
     jobs:
       - test:
+          context: codeartifact-dev
           name: py2
           runtime: "2.7"
       - test:
+          context: codeartifact-dev
           name: py3
           with-coverage: true
       - build-and-push:
