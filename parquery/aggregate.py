@@ -37,14 +37,15 @@ def aggregate_pq(
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
-        df = pd.DataFrame(None, columns=result_cols)
-        if as_df:
-            return df
-        else:
-            return pa.Table.from_pandas(df, preserve_index=False)
+        return create_empty_result(result_cols, as_df)
 
     # get result
     pq_file = pq.ParquetFile(file_name)
+
+    # check if we have all dimensions from the filters
+    for col, _, _ in data_filter:
+        if col not in pq_file.metadata.schema.names:
+            return create_empty_result(result_cols, as_df)
 
     # check filters
     if data_filter:
@@ -99,7 +100,17 @@ def aggregate_pq(
         del sub
         del row_group
 
-    # combine results
+
+def create_empty_result(result_cols, as_df):
+    df = pd.DataFrame(None, columns=result_cols)
+    if as_df:
+        res = df
+    else:
+        res = pa.Table.from_pandas(df, preserve_index=False)
+    return res
+
+
+# combine results
     if debug:
         print('Combining results')
 
