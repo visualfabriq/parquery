@@ -5,6 +5,7 @@ Release notes for parquery
 Release  0.3.2
 ==============
 - Add handling of missing columns in a parquet file that is used in a filter. This happens when new dimensions are created but existing parquet files do not have them yet. Now it throws an error for the query, the new behaviour will change this to giving an empty result. This is better because as the real value for the dimension is unknown for the file, the result should also be zero. It also greatly helps with issues where old files break reporting because they have not been updated yet.
+- Removed specification of parquet format (2.0 is now old)
 
 Release  0.2.7, 0.2.8
 ==============
