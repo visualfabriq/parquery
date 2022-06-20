@@ -29,7 +29,6 @@ def df_to_parquet(df, filename, workdir=None, chunksize=100000, debug=False):
         if writer is None:
             writer = pq.ParquetWriter(full_filename,
                                       data_table.schema,
-                                      version='2.0',
                                       compression='ZSTD'
                                       )
         # save result
@@ -43,7 +42,6 @@ def df_to_parquet(df, filename, workdir=None, chunksize=100000, debug=False):
         if writer is None:
             writer = pq.ParquetWriter(full_filename,
                                       data_table.schema,
-                                      version='2.0',
                                       compression='ZSTD'
                                       )
         writer.write_table(data_table)
