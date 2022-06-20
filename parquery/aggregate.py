@@ -100,17 +100,7 @@ def aggregate_pq(
         del sub
         del row_group
 
-
-def create_empty_result(result_cols, as_df):
-    df = pd.DataFrame(None, columns=result_cols)
-    if as_df:
-        res = df
-    else:
-        res = pa.Table.from_pandas(df, preserve_index=False)
-    return res
-
-
-# combine results
+    # combine results
     if debug:
         print('Combining results')
 
@@ -140,6 +130,15 @@ def create_empty_result(result_cols, as_df):
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def create_empty_result(result_cols, as_df):
+    df = pd.DataFrame(None, columns=result_cols)
+    if as_df:
+        res = df
+    else:
+        res = pa.Table.from_pandas(df, preserve_index=False)
+    return res
 
 
 def add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug):
