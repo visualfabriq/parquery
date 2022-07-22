@@ -37,7 +37,7 @@ jobs:
           name: Install dependencies
           command: |
             ~/venv/bin/pip install .[test]
-
+    
 
       # Save the cached dependencies
       - save_cache:
@@ -90,8 +90,8 @@ jobs:
           command: |
             pip install build
             python -m build
-      - codeartifact/push:
-          tool: twine
+#      - codeartifact/push:
+#          tool: twine
 
 workflows:
   version: 2.1
@@ -115,6 +115,7 @@ workflows:
               only:
                 - master
                 - main
+                - empty_files
 
   daily:
     triggers:
