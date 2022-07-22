@@ -81,6 +81,11 @@ jobs:
 
   build-and-push:
     executor: codeartifact/default
+    parameters:
+      is-pre-release:
+        description: if true the version tag will contain the branch
+        type: boolean
+        default: false
     steps:
       - checkout
       - codeartifact/init:
@@ -88,8 +93,12 @@ jobs:
       - run:
           name: Build
           command: |
+            if [[ "<< parameters.is-pre-release >>" == true ]]; then
+              PRE_RELEASE_VERISION="-${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:6}"
+            fi
             pip install build
             python -m build
+
 #      - codeartifact/push:
 #          tool: twine
 
@@ -115,6 +124,16 @@ workflows:
               only:
                 - master
                 - main
+      - build-and-push:
+          context: codeartifact-dev
+          requires:
+            - py2
+            - py3
+          is-pre-release: true
+          filters:
+            branches:
+              only:
+                - uat
                 - empty_files
 
   daily:
