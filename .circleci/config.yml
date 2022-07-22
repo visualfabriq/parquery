@@ -97,11 +97,9 @@ jobs:
               export PRE_RELEASE_VERISION="-${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:6}"
             fi
             pip install build
-            python -m build 
-            
-#python -m build --no-isolation
-#      - codeartifact/push:
-#          tool: twine
+            python -m build
+      - codeartifact/push:
+          tool: twine
 
 workflows:
   version: 2.1
@@ -135,7 +133,6 @@ workflows:
             branches:
               only:
                 - uat
-                - empty_files
 
   daily:
     triggers:
