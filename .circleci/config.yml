@@ -94,7 +94,7 @@ jobs:
           name: Build
           command: |
             if [[ "<< parameters.is-pre-release >>" == true ]]; then
-              DEV_VERSION=$(python -c 'print(int("${CIRCLE_SHA1:0:6}", 16))')
+              DEV_VERSION=$((16#${CIRCLE_SHA1:0:6}))
               export PRE_RELEASE_VERISION=".dev${DEV_VERSION}"
             fi
             pip install build
