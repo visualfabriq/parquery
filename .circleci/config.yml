@@ -94,12 +94,13 @@ jobs:
           name: Build
           command: |
             if [[ "<< parameters.is-pre-release >>" == true ]]; then
-              export PRE_RELEASE_VERISION=".dev${CIRCLE_SHA1:0:6}"
+              DEV_VERSION=$(python -c 'print(int("${CIRCLE_SHA1:0:6}", 16))')
+              export PRE_RELEASE_VERISION=".dev${DEV_VERSION}"
             fi
             pip install build
             python -m build
-      - codeartifact/push:
-          tool: twine
+#      - codeartifact/push:
+#          tool: twine
 
 workflows:
   version: 2.1
@@ -133,6 +134,7 @@ workflows:
             branches:
               only:
                 - uat
+                - empty_files
 
   daily:
     triggers:
