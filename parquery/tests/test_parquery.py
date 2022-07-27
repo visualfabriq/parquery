@@ -1086,21 +1086,3 @@ class TestParquery(object):
         data_table_2 = deserialize_pa_table(buf)
 
         assert data_table == data_table_2
-
-    def test_emtpy_file(self):
-        """
-        When a file is empty (does not contain any rows) it should still work.
-        """
-        self.filename = tempfile.mkstemp(prefix='test-')[-1]
-
-        data_table = pa.Table.from_pandas(pd.DataFrame(columns=['f0', 'f1']), preserve_index=False)
-        with pa.parquet.ParquetWriter(self.filename, data_table.schema, version='2.0', compression='ZSTD') as writer:
-            writer.write_table(data_table)
-
-        terms_filter = [('f0', '>', 10000)]
-        result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
-                     data_filter=terms_filter,
-                     aggregate=False)
-
-        assert len(result_parquery) == 0
-        assert set(result_parquery.columns) == {'f0', 'f1'}
