@@ -270,8 +270,19 @@ def convert_data_filter(data_filter):
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
+    """
+    Check if the filter applies, if the filter does not apply skip the row_group.
+    Args:
+        metadata_filter (list of list): e.g. [[0, '>', 10000]]
+        pq_file (pyarrow.parquet.ParquetFile): file to be checked
+        row_group:
+
+    Returns (bool): True if row_group should be skipped otherwise False
+
+    """
     rg_meta = pq_file.metadata.row_group(row_group)
-    skip = False
+    if rg_meta.num_rows == 0:
+        return True
     for col_nr, sign, values in metadata_filter:
         rg_col = rg_meta.column(col_nr)
         min_val = rg_col.statistics.min
@@ -280,37 +291,29 @@ def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
         # if the filter is not in the boundary of the range, then skip the rowgroup
         if sign == 'in':
             if not any(min_val <= val <= max_val for val in values):
-                skip = True
-                break
+                return True
         elif sign == 'not in':
             if any(min_val <= val <= max_val for val in values):
-                skip = True
-                break
+                return True
         elif sign in ['=', '==']:
             if not min_val <= values <= max_val:
-                skip = True
-                break
+                return True
         elif sign == '!=':
             if min_val <= values <= max_val:
-                skip = True
-                break
+                return True
         elif sign == '>':
             if max_val <= values:
-                skip = True
-                break
+                return True
         elif sign == '>=':
             if max_val < values:
-                skip = True
-                break
+                return True
         elif sign == '<':
             if min_val >= values:
-                skip = True
-                break
+                return True
         elif sign == '<=':
             if min_val > values:
-                skip = True
-                break
-    return skip
+                return True
+    return False
 
 
 def check_measure_cols(measure_cols):
