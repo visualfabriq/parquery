@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.3.4
+==============
+- Pinned pyarrow version because the new 9.0.0 causes segfaults
+
 Release  0.3.3
 ==============
 - Skip row_group if output is empty
