@@ -63,7 +63,7 @@ jobs:
           steps:
             - run:
                 name: Run tests
-                command: ~/venv/bin/python -m pytest parquery/tests
+                command: ~/venv/bin/python -m pytest tests
       - when:
           condition: << parameters.with-coverage >>
           steps:
@@ -71,7 +71,7 @@ jobs:
                 name: Run tests with coverage reporting
                 command: |
                   ~/venv/bin/python -m coverage run -m \
-                    pytest parquery/tests --junitxml=test-results/pytest/pytest-report.xml
+                    pytest tests --junitxml=test-results/pytest/pytest-report.xml
                   ~/venv/bin/python -m coverage xml -o cobertura.xml
             - store_test_results:
                 path: test-results
@@ -134,31 +134,3 @@ workflows:
             branches:
               only:
                 - uat
-
-  daily:
-    triggers:
-      - schedule:
-          cron: "0 10 * * *"
-          filters:
-            branches:
-              only:
-                - master
-    jobs:
-      - test:
-          context: codeartifact-dev
-          name: py2
-          runtime: "2.7"
-      - test:
-          context: codeartifact-dev
-          name: py3
-          with-coverage: true
-      - build-and-push:
-          context: codeartifact-dev
-          requires:
-            - py2
-            - py3
-          filters:
-            branches:
-              only:
-                - master
-                - main
