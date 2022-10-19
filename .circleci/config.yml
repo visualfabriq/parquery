@@ -110,25 +110,35 @@ workflows:
           context: codeartifact-dev
           name: py2
           runtime: "2.7"
+
       - test:
           context: codeartifact-dev
-          name: py3
+          name: py37
           with-coverage: true
+
+      - test:
+          context: codeartifact-dev
+          name: py310
+          runtime: "3.10"
+
       - build-and-push:
           context: codeartifact-dev
           requires:
             - py2
-            - py3
+            - py37
+            - py310
           filters:
             branches:
               only:
                 - master
                 - main
+
       - build-and-push:
           context: codeartifact-dev
           requires:
             - py2
-            - py3
+            - py37
+            - py310
           is-pre-release: true
           filters:
             branches:
