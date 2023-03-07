@@ -49,79 +49,36 @@ def aggregate_pq(
 
     # check filters
     if data_filter:
-        metadata_filter = convert_metadata_filter(data_filter, pq_file)
         data_filter_str, data_filter_sets = convert_data_filter(data_filter)
     else:
-        metadata_filter = None
         data_filter_str = None
         data_filter_sets = None
 
-    num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
-    result = []
-    for row_group in num_row_groups:
-        if debug:
-            print('Aggregating row group ' + str(row_group + 1) + ' of ' + str(pq_file.num_row_groups))
+    # ensure we work in pyarrow
+    pd.set_option("mode.dtype_backend", "pyarrow")
+    df = pd.read_parquet(file_name, engine='auto', columns=all_cols)
 
-        # push down filter
-        if metadata_filter:
-            skip = rowgroup_metadata_filter(metadata_filter, pq_file, row_group)
-            if skip:
-                continue
-
-        # get data into df
-        sub = pq_file.read_row_group(row_group, columns=all_cols)
-        df = sub.to_pandas()
-        if df.empty:
-            continue
-
+    if not df.empty:
         # add missing requested columns
         add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug)
 
-        # filter
         if data_filter:
             # filter based on the given requirements
             apply_data_filter(data_filter_str, data_filter_sets, df)
-            if df.empty:
-                # no values for this rowgroup
-                del sub
-                del row_group
-                del df
-                continue
 
-        # unneeded columns (when we filter on a non-result column)
+    if df.empty:
+        # empty result
+        df = pd.DataFrame(None, columns=result_cols)
+    else:
         unneeded_columns = [col for col in df if col not in input_cols]
         if unneeded_columns:
             df.drop(unneeded_columns, axis=1, inplace=True)
-
-        # save the result
-        result.append(df)
-
-        # cleanup
-        del sub
-        del row_group
-
-    # combine results
-    if debug:
-        print('Combining results')
-
-    if result:
-        if len(result) == 1:
-            df = result[0]
-        else:
-            df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
 
         if aggregate:
             df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         if row_group_filter is not None:
             df = df.rename(columns={x[0]: x[2] for x in measure_cols})
-
-        # cleanup
-        del result
-
-    else:
-        # empty result
-        df = pd.DataFrame(None, columns=result_cols)
 
     # ensure order
     df = df[result_cols]
@@ -248,18 +205,6 @@ def groupby_result(agg, df, groupby_cols, measure_cols):
     return df
 
 
-def convert_metadata_filter(data_filter, pq_file):
-    # we check if we have INT type of columns to try to do pushdown statistics filtering
-    metadata_filter = [
-        [pq_file.metadata.schema.names.index(col), sign, values]
-        for col, sign, values in data_filter
-    ]
-    metadata_filter = [[col_nr, sign, values] for col_nr, sign, values in metadata_filter
-                       if pq_file.schema.column(col_nr).physical_type in ['INT8', 'INT16', 'INT32', 'INT64']
-                       ]
-    return metadata_filter
-
-
 def convert_data_filter(data_filter):
     data_filter_str = ' and '.join([
         col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
@@ -267,53 +212,6 @@ def convert_data_filter(data_filter):
     data_filter_sets = [(col, sign, set(values)) for col, sign, values in data_filter
                         if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH]
     return data_filter_str, data_filter_sets
-
-
-def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
-    """
-    Check if the filter applies, if the filter does not apply skip the row_group.
-    Args:
-        metadata_filter (list of list): e.g. [[0, '>', 10000]]
-        pq_file (pyarrow.parquet.ParquetFile): file to be checked
-        row_group:
-
-    Returns (bool): True if row_group should be skipped otherwise False
-
-    """
-    rg_meta = pq_file.metadata.row_group(row_group)
-    if rg_meta.num_rows == 0:
-        return True
-    for col_nr, sign, values in metadata_filter:
-        rg_col = rg_meta.column(col_nr)
-        min_val = rg_col.statistics.min
-        max_val = rg_col.statistics.max
-
-        # if the filter is not in the boundary of the range, then skip the rowgroup
-        if sign == 'in':
-            if not any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign == 'not in':
-            if any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign in ['=', '==']:
-            if not min_val <= values <= max_val:
-                return True
-        elif sign == '!=':
-            if min_val <= values <= max_val:
-                return True
-        elif sign == '>':
-            if max_val <= values:
-                return True
-        elif sign == '>=':
-            if max_val < values:
-                return True
-        elif sign == '<':
-            if min_val >= values:
-                return True
-        elif sign == '<=':
-            if min_val > values:
-                return True
-    return False
 
 
 def check_measure_cols(measure_cols):
