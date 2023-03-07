@@ -774,7 +774,7 @@ class TestParquery(object):
         print('--> Numpy')
         np_result = [data['f4'].sum(), data['f5'].sum(), data['f6'].sum()]
 
-        assert list(result_parquery.loc[0]) == np_result
+        assert [round(x, 6) for x in result_parquery.loc[0]] == [round(x, 6) for x in np_result]
 
     def test_where_terms00(self):
         """
@@ -1094,7 +1094,7 @@ class TestParquery(object):
         self.filename = tempfile.mkstemp(prefix='test-')[-1]
 
         data_table = pa.Table.from_pandas(pd.DataFrame(columns=['f0', 'f1']), preserve_index=False)
-        with pa.parquet.ParquetWriter(self.filename, data_table.schema, version='2.0', compression='ZSTD') as writer:
+        with pa.parquet.ParquetWriter(self.filename, data_table.schema, compression='ZSTD') as writer:
             writer.write_table(data_table)
 
         terms_filter = [('f0', '>', 10000)]

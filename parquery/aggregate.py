@@ -47,16 +47,11 @@ def aggregate_pq(
         if col not in pq_file.metadata.schema.names:
             return create_empty_result(result_cols, as_df)
 
-    # check filters
-    if data_filter:
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
-    else:
-        data_filter_str = None
-        data_filter_sets = None
-
     # ensure we work in pyarrow
     pd.set_option("mode.dtype_backend", "pyarrow")
-    df = pd.read_parquet(file_name, engine='auto', columns=all_cols)
+
+    used_cols = [x for x in all_cols if x in pq_file.metadata.schema.names]
+    df = pd.read_parquet(file_name, engine='auto', columns=used_cols)
 
     if not df.empty:
         # add missing requested columns
@@ -64,7 +59,7 @@ def aggregate_pq(
 
         if data_filter:
             # filter based on the given requirements
-            apply_data_filter(data_filter_str, data_filter_sets, df)
+            apply_data_filter(data_filter, df)
 
     if df.empty:
         # empty result
@@ -124,7 +119,7 @@ def aggregate_pa(
         as_df=True,
         debug=False):
     """
-    A function to aggregate a arrow table using pandas
+    A function to aggregate an arrow table using pandas
     NB: we assume that all columns are strings
 
     """
@@ -141,8 +136,7 @@ def aggregate_pa(
     # filter
     if data_filter:
         # filter based on the given requirements
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
-        apply_data_filter(data_filter_str, data_filter_sets, df)
+        apply_data_filter(data_filter, df)
 
     # check if we have a result still
     if df.empty:
@@ -172,22 +166,42 @@ def aggregate_pa(
         return pa.Table.from_pandas(df, preserve_index=False)
 
 
-def apply_data_filter(data_filter_str, data_filter_set, df):
-    # filter on the straight eval
-    if data_filter_str:
-        df_to_natural_name(df)
-        mask = df.eval(data_filter_str)
-        df_to_original_name(df)
-        df.drop(df[~mask].index, inplace=True)
+def apply_data_filter(data_filter, df):
+    # filter on the straight eval (this does not perfdorm well with pyarrow as backend)
+    # if data_filter_str:
+    #     df_to_natural_name(df)
+    #     mask = df.eval(data_filter_str, engine='numexpr')
+    #     df_to_original_name(df)
+    #     df.drop(df[~mask].index, inplace=True)
 
     # filter on each longer list
-    if data_filter_set:
-        for col, sign, values in data_filter_set:
-            if sign == 'in':
-                mask = df[col].isin(values)
+    if data_filter:
+        for col, sign, values in data_filter:
+            if df.empty:
+                return
+            if sign in ('eq', '=='):
+                mask = df[col] == values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign in ('neq', '!='):
+                mask = df[col] != values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign == '>':
+                mask = df[col] > values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign == '>=':
+                mask = df[col] >= values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign == '<':
+                mask = df[col] < values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign == '<=':
+                mask = df[col] <= values
+                df.drop(df[~mask].index, inplace=True)
+            elif sign == 'in':
+                mask = df[col].isin(set(values))
                 df.drop(df[~mask].index, inplace=True)
             elif sign in ['not in', 'nin']:
-                mask = df[col].isin(values)
+                mask = df[col].isin(set(values))
                 df.drop(df[mask].index, inplace=True)
             else:
                 raise NotImplementedError('Unknown sign for set filter {}'.format(sign))
@@ -206,6 +220,7 @@ def groupby_result(agg, df, groupby_cols, measure_cols):
 
 
 def convert_data_filter(data_filter):
+    """ we do not use data filter strings because these do not work well on a pyarrow backend"""
     data_filter_str = ' and '.join([
         col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
         for col, sign, values in data_filter if not (isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH)])
