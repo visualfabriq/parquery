@@ -227,7 +227,8 @@ def apply_data_filter(data_filter_str, data_filter_set, df):
     if data_filter_set:
         for col, sign, values in data_filter_set:
             if sign == 'in':
-                mask = df[col].isin(values)
+                possible_values = set(df[col].unique()).intersection(values)
+                mask = df[col].isin(possible_values)
                 df.drop(df[~mask].index, inplace=True)
             elif sign in ['not in', 'nin']:
                 mask = df[col].isin(values)
