@@ -1,7 +1,7 @@
 version: 2.1
 orbs:
-  codeartifact: visualfabriq/codeartifact@1.0.0
-  coverage-reporter: codacy/coverage-reporter@13.6.0
+  codeartifact: visualfabriq/codeartifact@1.1.1
+  coverage-reporter: codacy/coverage-reporter@13.13.7
 
 jobs:
   test:
@@ -90,13 +90,14 @@ jobs:
       - checkout
       - codeartifact/init:
           tool: pip
+      - when:
+          condition: << parameters.is-pre-release >>
+          steps:
+            - codeartifact/pre_release_version:
+                package: metadata
       - run:
           name: Build
           command: |
-            if [[ "<< parameters.is-pre-release >>" == true ]]; then
-              DEV_VERSION=$((16#${CIRCLE_SHA1:0:6}))
-              export PRE_RELEASE_VERSION=".dev${DEV_VERSION}"
-            fi
             pip install build
             python -m build
       - codeartifact/push:
