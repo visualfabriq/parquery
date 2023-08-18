@@ -17,9 +17,9 @@ from sys import version_info as v
 from setuptools import setup, find_packages
 
 # Check this Python version is supported
-if any([v < (2, 6), (3,) < v < (3, 5)]):
+if any([v < (2, 6), (3,) < v < (3, 7)]):
     raise Exception("Unsupported Python version %d.%d. Requires Python == 2.7 "
-                    "or >= 3.5." % v[:2])
+                    "or >= 3.7." % v[:2])
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -36,18 +36,22 @@ def read(*parts):
 # Sources & libraries
 sources = []
 optional_libs = []
-install_requires = []
+install_requires = [
+    'pyarrow==0.16.0;python_version=="2.7"',
+    'pyarrow>=1.0.0, <=8.0.0;python_version>="3.7"',
+    'pandas==0.24.2;python_version=="2.7"',
+    'pandas>=1.1;python_version>="3.7"',
+    'numpy==1.16.6;python_version=="2.7"',
+    'numpy>=1.19.1;python_version>="3.7"',
+    'numexpr==2.7.3;python_version=="2.7"',
+    'numexpr>=2.7.3;python_version>="3.7"'
+]
 setup_requires = []
-tests_requires = ['pytest', 'coverage']
-if v < (3,):
-    install_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
-    setup_requires.extend(['pyarrow==0.16.0', 'pandas==0.24.2', 'numpy==1.16.6', 'numexpr==2.7.3'])
-else:
-    install_requires.extend(['pyarrow>=1.0.0', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
-    setup_requires.extend(['pyarrow>=1.0.0', 'pandas>=1.1', 'numpy>=1.19.1', 'numexpr>=2.7.3'])
-
+tests_requires = [
+    'pytest',
+    'coverage'
+]
 extras_requires = []
-
 extensions = []
 
 package_data = {}
@@ -77,8 +81,8 @@ setup(
     classifiers=classifiers,
     author='Carst Vaartjes',
     author_email='cvaartjes@visualfabriq.com',
-    maintainer='Carst Vaartjes',
-    maintainer_email='cvaartjes@visualfabriq.com',
+    maintainer='Jelle Verstraaten',
+    maintainer_email='jverstraaten@visualfabriq.com',
     url='https://github.com/visualfabriq/parquery',
     license='MIT',
     platforms=['any'],

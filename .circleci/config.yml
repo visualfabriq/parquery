@@ -63,7 +63,7 @@ jobs:
           steps:
             - run:
                 name: Run tests
-                command: ~/venv/bin/python -m pytest parquery/tests
+                command: ~/venv/bin/python -m pytest tests
       - when:
           condition: << parameters.with-coverage >>
           steps:
@@ -71,7 +71,7 @@ jobs:
                 name: Run tests with coverage reporting
                 command: |
                   ~/venv/bin/python -m coverage run -m \
-                    pytest parquery/tests --junitxml=test-results/pytest/pytest-report.xml
+                    pytest tests --junitxml=test-results/pytest/pytest-report.xml
                   ~/venv/bin/python -m coverage xml -o cobertura.xml
             - store_test_results:
                 path: test-results
@@ -95,7 +95,7 @@ jobs:
           command: |
             if [[ "<< parameters.is-pre-release >>" == true ]]; then
               DEV_VERSION=$((16#${CIRCLE_SHA1:0:6}))
-              export PRE_RELEASE_VERISION=".dev${DEV_VERSION}"
+              export PRE_RELEASE_VERSION=".dev${DEV_VERSION}"
             fi
             pip install build
             python -m build
@@ -110,55 +110,37 @@ workflows:
           context: codeartifact-dev
           name: py2
           runtime: "2.7"
+
       - test:
           context: codeartifact-dev
-          name: py3
+          name: py37
           with-coverage: true
+
+      - test:
+          context: codeartifact-dev
+          name: py310
+          runtime: "3.10"
+
       - build-and-push:
           context: codeartifact-dev
           requires:
             - py2
-            - py3
+            - py37
+            - py310
           filters:
             branches:
               only:
                 - master
                 - main
+
       - build-and-push:
           context: codeartifact-dev
           requires:
             - py2
-            - py3
+            - py37
+            - py310
           is-pre-release: true
           filters:
             branches:
               only:
                 - uat
-
-  daily:
-    triggers:
-      - schedule:
-          cron: "0 10 * * *"
-          filters:
-            branches:
-              only:
-                - master
-    jobs:
-      - test:
-          context: codeartifact-dev
-          name: py2
-          runtime: "2.7"
-      - test:
-          context: codeartifact-dev
-          name: py3
-          with-coverage: true
-      - build-and-push:
-          context: codeartifact-dev
-          requires:
-            - py2
-            - py3
-          filters:
-            branches:
-              only:
-                - master
-                - main
