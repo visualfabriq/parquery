@@ -94,7 +94,7 @@ jobs:
           condition: << parameters.is-pre-release >>
           steps:
             - codeartifact/pre_release_version:
-                package: metadata
+                package: parquery
       - run:
           name: Build
           command: |
