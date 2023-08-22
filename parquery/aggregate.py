@@ -7,6 +7,7 @@ from parquery.tool import df_to_natural_name, df_to_original_name
 
 FILTER_CUTOVER_LENGTH = 10
 
+SAFE_PREAGGREGATE = set(['min', 'max', 'sum'])
 
 def aggregate_pq(
         file_name,
@@ -34,6 +35,8 @@ def aggregate_pq(
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+    agg_ops = {ops[1] for ops in agg}
+    preaggregate = aggregate and agg_ops.issubset(SAFE_PREAGGREGATE)
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
@@ -92,6 +95,9 @@ def aggregate_pq(
         unneeded_columns = [col for col in df if col not in input_cols]
         if unneeded_columns:
             df.drop(unneeded_columns, axis=1, inplace=True)
+
+        if preaggregate:
+            df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         # save the result
         result.append(df)
