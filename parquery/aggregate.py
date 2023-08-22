@@ -93,6 +93,9 @@ def aggregate_pq(
         if unneeded_columns:
             df.drop(unneeded_columns, axis=1, inplace=True)
 
+        if aggregate:
+            df = groupby_result(agg, df, groupby_cols, measure_cols)
+
         # save the result
         result.append(df)
 
