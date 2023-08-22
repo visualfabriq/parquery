@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from parquery.tool import df_to_natural_name, df_to_original_name
@@ -82,7 +83,7 @@ def aggregate_pq(
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        if data_filter_expr:
+        if data_filter_expr is not None:
             sub = sub.filter(data_filter_expr)
 
         df = sub.to_pandas()
@@ -284,14 +285,22 @@ def convert_metadata_filter(data_filter, pq_file):
 def convert_data_filter(data_filter):
     data_filter_strs = []
     data_filter_sets = []
+    data_filter_expr = None
     for col, sign, values in data_filter:
+        if sign == 'in':
+            expr = pc.field(col).isin(values)
+            if data_filter_expr is None:
+                data_filter_expr = expr
+            else:
+                data_filter_expr = data_filter_expr & expr
+            continue
+
         if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
             data_filter_sets.append((col, sign, set(values)))
         else:
             data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
 
     data_filter_str = ' and '.join(data_filter_strs)
-    data_filter_expr = None
     return data_filter_str, data_filter_sets, data_filter_expr
 
 
