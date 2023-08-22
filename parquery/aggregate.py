@@ -35,8 +35,12 @@ def aggregate_pq(
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
-    agg_ops = {ops[1] for ops in agg}
-    preaggregate = aggregate and agg_ops.issubset(SAFE_PREAGGREGATE)
+    agg_ops = set(agg.values())
+    preaggregate = (
+        aggregate
+        and agg_ops.issubset(SAFE_PREAGGREGATE)
+        and groupby_cols
+    )
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
@@ -73,12 +77,13 @@ def aggregate_pq(
 
         # get data into df
         sub = pq_file.read_row_group(row_group, columns=all_cols)
+
+        # add missing requested columns
+        sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
+
         df = sub.to_pandas()
         if df.empty:
             continue
-
-        # add missing requested columns
-        add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug)
 
         # filter
         if data_filter:
@@ -147,21 +152,25 @@ def create_empty_result(result_cols, as_df):
     return res
 
 
-def add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug):
+def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing_id, debug):
     expected_measure_cols = [x[0] for x in measure_cols]
 
     for col in all_cols:
-        if col not in df:
-            if col in expected_measure_cols:
-                # missing measure columns get a 0.0 result
-                standard_value = 0.0
-            else:
-                # missing dimension columns get the standard id for missing values
-                standard_value = standard_missing_id
+        if col in table.column_names:
+            continue
 
-            if debug:
-                print('Adding missing column {} with standard value {}'.format(col, standard_value))
-            df[col] = standard_value
+        if col in expected_measure_cols:
+            # missing measure columns get a 0.0 result
+            standard_value = 0.0
+        else:
+            # missing dimension columns get the standard id for missing values
+            standard_value = standard_missing_id
+
+        if debug:
+            print('Adding missing column {} with standard value {}'.format(col, standard_value))
+        table = table.append_column(col, [[standard_value] * len(table)])
+
+    return table
 
 
 def aggregate_pa(
