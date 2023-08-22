@@ -282,11 +282,15 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_str = ' and '.join([
-        col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
-        for col, sign, values in data_filter if not (isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH)])
-    data_filter_sets = [(col, sign, set(values)) for col, sign, values in data_filter
-                        if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH]
+    data_filter_strs = []
+    data_filter_sets = []
+    for col, sign, values in data_filter:
+        if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
+            data_filter_sets.append((col, sign, set(values)))
+        else:
+            data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
+
+    data_filter_str = ' and '.join(data_filter_strs)
     data_filter_expr = None
     return data_filter_str, data_filter_sets, data_filter_expr
 
