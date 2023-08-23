@@ -2,7 +2,7 @@
 Release notes for parquery
 ========================
 
-Release  0.3.5
+Release  0.4.0
 ==============
 - Unpinned pyarrow since we have a newer version now
 - Implemented python 3 (pyarrow 9+) specific pyarrow logic to optimize memory consumption
