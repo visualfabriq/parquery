@@ -99,19 +99,19 @@ def aggregate_pq(
                 col_names = [rename_cols.get(c, c) for c in sub.column_names]
                 sub = sub.rename_columns(col_names)
 
-        df = sub.to_pandas()
-        if df.empty:
-            continue
+            result.append(sub)
+        else:
+            df = sub.to_pandas()
+            if df.empty:
+                continue
 
-        # filter
-        if not six.PY3:
+            # filter
             if data_filter:
                 # filter based on the given requirements
                 apply_data_filter(data_filter_str, data_filter_sets, df)
                 if df.empty:
                     # no values for this rowgroup
                     del sub
-                    del row_group
                     del df
                     continue
 
@@ -123,12 +123,11 @@ def aggregate_pq(
             if preaggregate:
                 df = groupby_result(agg, df, groupby_cols, measure_cols)
 
-        # save the result
-        result.append(df)
+            # save the result
+            result.append(df)
 
-        # cleanup
-        del sub
-        del row_group
+            # cleanup
+            del sub
 
     # combine results
     if debug:
@@ -136,9 +135,15 @@ def aggregate_pq(
 
     if result:
         if len(result) == 1:
-            df = result[0]
+            if six.PY3:
+                df = result[0].to_pandas()
+            else:
+                df = result[0]
         else:
-            df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
+            if six.PY3:
+                df = pa.concat_tables(result).to_pandas()
+            else:
+                df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
 
         if aggregate:
             df = groupby_result(agg, df, groupby_cols, measure_cols)
