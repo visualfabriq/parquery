@@ -94,10 +94,7 @@ def aggregate_pq(
                 sub = sub.drop_columns(unneeded_columns)
 
             if preaggregate:
-                sub = sub.group_by(groupby_cols).aggregate(list(agg.items()))
-                rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
-                col_names = [rename_cols.get(c, c) for c in sub.column_names]
-                sub = sub.rename_columns(col_names)
+                sub = groupby_py3(groupby_cols, agg, sub)
 
             result.append(sub)
         else:
@@ -165,6 +162,12 @@ def aggregate_pq(
         return df
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
+
+def groupby_py3(groupby_cols, agg, table):
+    grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
+    rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
+    col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
+    return grouped_table.rename_columns(col_names)
 
 
 def create_empty_result(result_cols, as_df):
