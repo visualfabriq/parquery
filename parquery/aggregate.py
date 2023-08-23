@@ -131,14 +131,15 @@ def aggregate_pq(
         print('Combining results')
 
     if result:
-        if len(result) == 1:
-            if six.PY3:
-                df = result[0].to_pandas()
+        if six.PY3:
+            if len(result) == 1:
+                table = result[0]
             else:
-                df = result[0]
+                table = pa.concat_tables(result)
+            df = table.to_pandas()
         else:
-            if six.PY3:
-                df = pa.concat_tables(result).to_pandas()
+            if len(result) == 1:
+                df = result[0]
             else:
                 df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
 
