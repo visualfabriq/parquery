@@ -76,9 +76,8 @@ def apply_parquet_aggregation(
                 # aggregate + data filter + no group by cols
                 results = []
                 for expr in set(x[1] for x in measure_cols):
-                    applied_cols = [x[0] for x in measure_cols if x[1] == expr]
                     results.append(eval(""
-                    "pl.read_parquet(file_name, columns=applied_cols, rechunk=False, low_memory=True)"
+                    "pl.read_parquet(file_name, columns=all_cols, rechunk=False, low_memory=True)"
                               ".filter(polars_filter).{}()"
                               "".format(expr)))
                 if len(results) == 1:
@@ -98,9 +97,8 @@ def apply_parquet_aggregation(
                 # aggregate + no data filter + no group by cols
                 results = []
                 for expr in set(x[1] for x in measure_cols):
-                    applied_cols = [x[0] for x in measure_cols if x[1] == expr]
                     results.append(eval(""
-                            "pl.read_parquet(file_name, columns=applied_cols, rechunk=False, low_memory=True)"
+                            "pl.read_parquet(file_name, columns=all_cols, rechunk=False, low_memory=True)"
                               ".{}()"
                               "".format(expr)))
                 if len(results) == 1:
@@ -123,7 +121,7 @@ def apply_parquet_aggregation(
         df = df.drop(unneeded_columns)
 
     # add missing requested columns
-    add_missing_columns_to_df(df, expected_groupby_cols, expected_measure_cols, standard_missing_id, debug)
+    df = add_missing_columns_to_df(df, expected_groupby_cols, expected_measure_cols, standard_missing_id, debug)
 
     # ensure order
     df = df[result_cols]
@@ -183,3 +181,4 @@ def add_missing_columns_to_df(df, expected_groupby_cols, expected_measure_cols, 
             if debug:
                 print('Adding missing column {} with standard value {}'.format(col, standard_value))
             df = df.with_columns(pl.lit(standard_value).alias(col))
+    return df
