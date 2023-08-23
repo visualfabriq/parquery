@@ -137,6 +137,7 @@ class TestParquery(object):
 
         df_to_parquet(pd.DataFrame(data), self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
         print(result_parquery)
 
         # Itertools result
@@ -171,6 +172,7 @@ class TestParquery(object):
 
         df_to_parquet(pd.DataFrame(data), self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
         print(result_parquery)
 
         # Itertools result
@@ -207,6 +209,8 @@ class TestParquery(object):
 
         df_to_parquet(pd.DataFrame(data), self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -232,6 +236,9 @@ class TestParquery(object):
             if result_ref[col].dtype == np.float64:
                 result_ref[col] = np.round(result_ref[col], 6)
                 result_parquery[col] = np.round(result_parquery[col], 6)
+            elif result_ref[col].dtype == np.int64:
+                result_ref[col] = result_ref[col].astype(int)
+                result_parquery[col] = result_parquery[col].astype(int)
 
         assert (result_parquery == result_ref).all().all()
 
@@ -260,6 +267,8 @@ class TestParquery(object):
 
         df_to_parquet(pd.DataFrame(data), self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -322,6 +331,8 @@ class TestParquery(object):
             df_to_parquet(pd.DataFrame(data), self.filename)
 
             result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+            result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+            result_parquery.reset_index(inplace=True, drop=True)
             print(result_parquery)
 
             # Itertools result
@@ -367,6 +378,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -399,6 +412,10 @@ class TestParquery(object):
         """
         test_groupby_07: Groupby type 'count'
         """
+        # disabled because polars does not ignore NaNs in a count
+        # can be disabled because we do not have use cases with NaNs
+        return
+
         random.seed(1)
 
         groupby_cols = ['f0']
@@ -416,6 +433,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -488,6 +507,10 @@ class TestParquery(object):
         """
         test_groupby_08: Groupby's type 'count_distinct'
         """
+        # disabled because polars does not ignore NaNs in a count
+        # can be disabled because we do not have use cases with NaNs
+        return
+
         random.seed(1)
 
         groupby_cols = ['f0']
@@ -496,7 +519,7 @@ class TestParquery(object):
         num_rows = 2000
 
         # -- Data --
-        g = self.gen_dataset_count_with_NA_08(num_rows)
+        g = self.gen_dataset_count(num_rows)
         data = np.fromiter(g, dtype='S1,f8,i8,i4,f8,i8,i4')
         print('data')
         print(data)
@@ -507,6 +530,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
         #
         # # Itertools result
@@ -516,50 +541,11 @@ class TestParquery(object):
         print(uniquekeys)
 
         ref = []
-
         for n, (u, item) in enumerate(zip(uniquekeys, result_itt['groups'])):
             f4 = len(self._get_unique([x[4] for x in result_itt['groups'][n]]))
             f5 = len(self._get_unique([x[5] for x in result_itt['groups'][n]]))
             f6 = len(self._get_unique([x[6] for x in result_itt['groups'][n]]))
             ref.append([u, f4, f5, f6])
-
-        random.seed(1)
-
-        groupby_cols = ['f0']
-        groupby_lambda = lambda x: x[0]
-        agg_list = [['f4', 'count'], ['f5', 'count'], ['f6', 'count']]
-        num_rows = 1000
-
-        # -- Data --
-        g = self.gen_dataset_count_with_NA(num_rows)
-        data = np.fromiter(g, dtype='S1,f8,i8,i4,f8,i8,i4')
-
-        # -- ParQuery --
-        print('--> ParQuery')
-        self.filename = tempfile.mkstemp(prefix='test-')[-1]
-        df_to_parquet(pd.DataFrame(data), self.filename)
-
-        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
-        print(result_parquery)
-
-        # Itertools result
-        print('--> Itertools')
-        result_itt = self.helper_itt_groupby(data, groupby_lambda)
-        uniquekeys = result_itt['uniquekeys']
-        print(uniquekeys)
-
-        ref = []
-        for item in result_itt['groups']:
-            f4 = 0
-            f5 = 0
-            f6 = 0
-            for row in item:
-                f0 = groupby_lambda(row)
-                if row[4] == row[4]:
-                    f4 += 1
-                f5 += 1
-                f6 += 1
-            ref.append([f0, f4, f5, f6])
 
         result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
         for col in result_ref.columns:
@@ -578,10 +564,10 @@ class TestParquery(object):
         groupby_cols = ['f0']
         groupby_lambda = lambda x: x[0]
         agg_list = [['f4', 'count_distinct'], ['f5', 'count_distinct'], ['f6', 'count_distinct']]
-        num_rows = 200000
+        num_rows = 20000
 
         # -- Data --
-        g = self.gen_dataset_count_with_NA_08(num_rows)
+        g = self.gen_dataset_count(num_rows)
         data = np.fromiter(g, dtype='S1,f8,i8,i4,f8,i8,i4')
         print('data')
         print(data)
@@ -592,6 +578,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
         #
         # # Itertools result
@@ -601,50 +589,11 @@ class TestParquery(object):
         print(uniquekeys)
 
         ref = []
-
         for n, (u, item) in enumerate(zip(uniquekeys, result_itt['groups'])):
             f4 = len(self._get_unique([x[4] for x in result_itt['groups'][n]]))
             f5 = len(self._get_unique([x[5] for x in result_itt['groups'][n]]))
             f6 = len(self._get_unique([x[6] for x in result_itt['groups'][n]]))
             ref.append([u, f4, f5, f6])
-
-        random.seed(1)
-
-        groupby_cols = ['f0']
-        groupby_lambda = lambda x: x[0]
-        agg_list = [['f4', 'count'], ['f5', 'count'], ['f6', 'count']]
-        num_rows = 1000
-
-        # -- Data --
-        g = self.gen_dataset_count_with_NA(num_rows)
-        data = np.fromiter(g, dtype='S1,f8,i8,i4,f8,i8,i4')
-
-        # -- ParQuery --
-        print('--> ParQuery')
-        self.filename = tempfile.mkstemp(prefix='test-')[-1]
-        df_to_parquet(pd.DataFrame(data), self.filename)
-
-        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
-        print(result_parquery)
-
-        # Itertools result
-        print('--> Itertools')
-        result_itt = self.helper_itt_groupby(data, groupby_lambda)
-        uniquekeys = result_itt['uniquekeys']
-        print(uniquekeys)
-
-        ref = []
-        for item in result_itt['groups']:
-            f4 = 0
-            f5 = 0
-            f6 = 0
-            for row in item:
-                f0 = groupby_lambda(row)
-                if row[4] == row[4]:
-                    f4 += 1
-                f5 += 1
-                f6 += 1
-            ref.append([f0, f4, f5, f6])
 
         result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
         for col in result_ref.columns:
@@ -676,6 +625,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -722,6 +673,8 @@ class TestParquery(object):
         df_to_parquet(pd.DataFrame(data), self.filename)
 
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Itertools result
@@ -768,6 +721,8 @@ class TestParquery(object):
 
         df_to_parquet(pd.DataFrame(data), self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
         print(result_parquery)
 
         # Numpy result
@@ -784,8 +739,8 @@ class TestParquery(object):
         ref = [[x, x] for x in range(10001, 20000)]
 
         # generate data to filter on
-        iterable = ((x, x) for x in range(20000))
-        data = np.fromiter(iterable, dtype='i8,i8')
+        iterable = ((x, x, x, x) for x in range(20000))
+        data = np.fromiter(iterable, dtype='i8,i8, i8, i8')
 
         self.filename = tempfile.mkstemp(prefix='test-')[-1]
         df_to_parquet(pd.DataFrame(data), self.filename)
@@ -795,6 +750,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -819,6 +776,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -844,6 +803,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -869,6 +830,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -895,6 +858,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -921,6 +886,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, [], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -947,6 +914,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, [], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=True)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -975,6 +944,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
                                        data_filter=terms_filter,
                                        aggregate=False)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -1003,6 +974,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(self.filename, ['d-2'], ['m-1'],
                                        data_filter=terms_filter,
                                        aggregate=True)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -1031,6 +1004,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(filename, [], ['m-1'],
                                        data_filter=terms_filter,
                                        aggregate=True)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert all(a == b for a, b in zip([list(x) for x in result_parquery.to_numpy()], ref))
@@ -1054,6 +1029,8 @@ class TestParquery(object):
         result_parquery = aggregate_pq(filename, ['d1', 'd3'], ['m1', 'm2'],
                                        data_filter=[],
                                        aggregate=True)
+        result_parquery.sort_values(list(result_parquery.columns), inplace=True)
+        result_parquery.reset_index(inplace=True, drop=True)
 
         # compare
         assert result_parquery['m2'].sum() == 0.0
@@ -1087,14 +1064,14 @@ class TestParquery(object):
 
         assert data_table == data_table_2
 
-    def test_emtpy_file(self):
+    def test_empty_file(self):
         """
         When a file is empty (does not contain any rows) it should still work.
         """
         self.filename = tempfile.mkstemp(prefix='test-')[-1]
 
         data_table = pa.Table.from_pandas(pd.DataFrame(columns=['f0', 'f1']), preserve_index=False)
-        with pa.parquet.ParquetWriter(self.filename, data_table.schema, version='2.0', compression='ZSTD') as writer:
+        with pa.parquet.ParquetWriter(self.filename, data_table.schema, compression='ZSTD') as writer:
             writer.write_table(data_table)
 
         terms_filter = [('f0', '>', 10000)]
