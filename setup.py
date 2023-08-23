@@ -40,7 +40,7 @@ install_requires = [
     'pyarrow==0.16.0;python_version=="2.7"',
     'pyarrow>=1.0.0, <=8.0.0;python_version>="3.7"',
     'pandas==0.24.2;python_version=="2.7"',
-    'pandas==1.5.3;python_version>="3.7"',
+    'pandas>=1.1;python_version>="3.7"',
     'polars==0.18.15;python_version>="3.7"',
     'numpy==1.16.6;python_version=="2.7"',
     'numpy>=1.19.1;python_version>="3.7"',
