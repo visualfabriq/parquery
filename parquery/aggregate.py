@@ -1,13 +1,14 @@
 import os
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
+import six
 
 from parquery.tool import df_to_natural_name, df_to_original_name
 
 FILTER_CUTOVER_LENGTH = 10
-
 SAFE_PREAGGREGATE = set(['min', 'max', 'sum'])
 
 def aggregate_pq(
@@ -83,31 +84,44 @@ def aggregate_pq(
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        if data_filter_expr is not None:
-            sub = sub.filter(data_filter_expr)
+        if six.PY3: # Use 
+            if data_filter_expr is not None:
+                sub = sub.filter(data_filter_expr)
+
+            # unneeded columns (when we filter on a non-result column)
+            unneeded_columns = [col for col in sub.column_names if col not in input_cols]
+            if unneeded_columns:
+                sub = sub.drop_columns(unneeded_columns)
+
+            if preaggregate:
+                sub = sub.group_by(groupby_cols).aggregate(list(agg.items()))
+                rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
+                col_names = [rename_cols.get(c, c) for c in sub.column_names]
+                sub = sub.rename_columns(col_names)
 
         df = sub.to_pandas()
         if df.empty:
             continue
 
         # filter
-        if data_filter:
-            # filter based on the given requirements
-            apply_data_filter(data_filter_str, data_filter_sets, df)
-            if df.empty:
-                # no values for this rowgroup
-                del sub
-                del row_group
-                del df
-                continue
+        if not six.PY3:
+            if data_filter:
+                # filter based on the given requirements
+                apply_data_filter(data_filter_str, data_filter_sets, df)
+                if df.empty:
+                    # no values for this rowgroup
+                    del sub
+                    del row_group
+                    del df
+                    continue
 
-        # unneeded columns (when we filter on a non-result column)
-        unneeded_columns = [col for col in df if col not in input_cols]
-        if unneeded_columns:
-            df.drop(unneeded_columns, axis=1, inplace=True)
+            # unneeded columns (when we filter on a non-result column)
+            unneeded_columns = [col for col in df if col not in input_cols]
+            if unneeded_columns:
+                df.drop(unneeded_columns, axis=1, inplace=True)
 
-        if preaggregate:
-            df = groupby_result(agg, df, groupby_cols, measure_cols)
+            if preaggregate:
+                df = groupby_result(agg, df, groupby_cols, measure_cols)
 
         # save the result
         result.append(df)
@@ -287,18 +301,36 @@ def convert_data_filter(data_filter):
     data_filter_sets = []
     data_filter_expr = None
     for col, sign, values in data_filter:
-        if sign == 'in':
-            expr = pc.field(col).isin(values)
+        if six.PY2:
+            if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
+                data_filter_sets.append((col, sign, set(values)))
+            else:
+                data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
+            continue
+        else:
+            if sign == 'in':
+                expr = pc.field(col).isin(values)
+            elif sign in ['not in', 'nin']:
+                expr = ~pc.field(col).isin(values)
+            elif sign in ['=', '==']:
+                expr = pc.field(col) == values
+            elif sign == '!=':
+                expr = pc.field(col) != values
+            elif sign == '>':
+                expr = pc.field(col) > values
+            elif sign == '>=':
+                expr = pc.field(col) >= values
+            elif sign == '<=':
+                expr = pc.field(col) <= values
+            elif sign == '<':
+                expr = pc.field(col) < values
+            else:
+                raise NotImplementedError('Operation "{}" is not supported'.format(sign))
+
             if data_filter_expr is None:
                 data_filter_expr = expr
             else:
                 data_filter_expr = data_filter_expr & expr
-            continue
-
-        if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
-            data_filter_sets.append((col, sign, set(values)))
-        else:
-            data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
 
     data_filter_str = ' and '.join(data_filter_strs)
     return data_filter_str, data_filter_sets, data_filter_expr
