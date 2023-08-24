@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import six
 
 from parquery.write import df_to_parquet
 from parquery.transport import (
@@ -52,6 +53,10 @@ def test_serialization():
     df = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
 
     parquery_encoded = serialize_df(df)
-    assert isinstance(parquery_encoded, str)
+    if six.PY2:
+        assert isinstance(parquery_encoded, str)
+    else:
+        assert isinstance(parquery_encoded, bytes)
+
     deserialized_parquery_df = deserialize_df(parquery_encoded)
     assert df.to_dict() == deserialized_parquery_df.to_dict()
