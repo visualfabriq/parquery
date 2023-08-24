@@ -53,10 +53,7 @@ def test_serialization():
     df = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
 
     parquery_encoded = serialize_df(df)
-    if six.PY2:
-        assert isinstance(parquery_encoded, str)
-    else:
-        assert isinstance(parquery_encoded, bytes)
+    assert isinstance(parquery_encoded, pa.Buffer)
 
     deserialized_parquery_df = deserialize_df(parquery_encoded)
     assert df.to_dict() == deserialized_parquery_df.to_dict()
