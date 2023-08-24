@@ -4,7 +4,7 @@ from parquery.write import df_to_parquet
 import os
 
 pre_release_version = os.getenv('PRE_RELEASE_VERSION', '')
-__version__ = '0.4.0{}'.format(pre_release_version)
+__version__ = '0.4.1{}'.format(pre_release_version)
 
 __all__ = [
     'aggregate_pq',

@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.4.1
+==============
+- Fixed broken serialization and added tests to verify
+
 Release  0.4.0
 ==============
 - Unpinned pyarrow since we have a newer version now
