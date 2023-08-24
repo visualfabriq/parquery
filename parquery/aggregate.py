@@ -8,6 +8,9 @@ import six
 
 from parquery.tool import df_to_natural_name, df_to_original_name
 
+class FilterValueError(ValueError):
+    pass
+
 FILTER_CUTOVER_LENGTH = 10
 SAFE_PREAGGREGATE = set(['min', 'max', 'sum'])
 
@@ -364,31 +367,35 @@ def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
         min_val = rg_col.statistics.min
         max_val = rg_col.statistics.max
 
-        # if the filter is not in the boundary of the range, then skip the rowgroup
-        if sign == 'in':
-            if not any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign == 'not in':
-            if any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign in ['=', '==']:
-            if not min_val <= values <= max_val:
-                return True
-        elif sign == '!=':
-            if min_val <= values <= max_val:
-                return True
-        elif sign == '>':
-            if max_val <= values:
-                return True
-        elif sign == '>=':
-            if max_val < values:
-                return True
-        elif sign == '<':
-            if min_val >= values:
-                return True
-        elif sign == '<=':
-            if min_val > values:
-                return True
+        try:
+            # if the filter is not in the boundary of the range, then skip the rowgroup
+            if sign == 'in':
+                if not any(min_val <= val <= max_val for val in values):
+                    return True
+            elif sign == 'not in':
+                if any(min_val <= val <= max_val for val in values):
+                    return True
+            elif sign in ['=', '==']:
+                if not min_val <= values <= max_val:
+                    return True
+            elif sign == '!=':
+                if min_val <= values <= max_val:
+                    return True
+            elif sign == '>':
+                if max_val <= values:
+                    return True
+            elif sign == '>=':
+                if max_val < values:
+                    return True
+            elif sign == '<':
+                if min_val >= values:
+                    return True
+            elif sign == '<=':
+                if min_val > values:
+                    return True
+        except TypeError:
+            raise FilterValueError('Dimension filters MUST be numbers, please convert dimension values to dimension ids')
+
     return False
 
 

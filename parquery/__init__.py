@@ -1,4 +1,4 @@
-from parquery.aggregate import aggregate_pq, aggregate_pa
+from parquery.aggregate import aggregate_pq, aggregate_pa, FilterValueError
 from parquery.transport import serialize_df, deserialize_df, serialize_pa_table, deserialize_pa_table
 from parquery.write import df_to_parquet
 import os
@@ -9,6 +9,7 @@ __version__ = '0.4.0{}'.format(pre_release_version)
 __all__ = [
     'aggregate_pq',
     'aggregate_pa',
+    'FilterValueError',
     'serialize_df',
     'deserialize_df',
     'serialize_pa_table',
