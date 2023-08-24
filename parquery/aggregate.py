@@ -87,7 +87,7 @@ def aggregate_pq(
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        if six.PY3: # Use 
+        if six.PY3:
             if data_filter_expr is not None:
                 sub = sub.filter(data_filter_expr)
 
