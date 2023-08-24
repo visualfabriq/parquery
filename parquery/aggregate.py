@@ -1,12 +1,18 @@
 import os
+
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
+import six
 
 from parquery.tool import df_to_natural_name, df_to_original_name
 
-FILTER_CUTOVER_LENGTH = 10
+class FilterValueError(ValueError):
+    pass
 
+FILTER_CUTOVER_LENGTH = 10
+SAFE_PREAGGREGATE = set(['min', 'max', 'sum'])
 
 def aggregate_pq(
         file_name,
@@ -34,6 +40,12 @@ def aggregate_pq(
 
     # create pandas-compliant aggregation
     agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+    agg_ops = set(agg.values())
+    preaggregate = (
+        aggregate
+        and agg_ops.issubset(SAFE_PREAGGREGATE)
+        and groupby_cols
+    )
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
@@ -50,11 +62,12 @@ def aggregate_pq(
     # check filters
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
+        data_filter_str, data_filter_sets, data_filter_expr = convert_data_filter(data_filter)
     else:
         metadata_filter = None
         data_filter_str = None
         data_filter_sets = None
+        data_filter_expr = None
 
     num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
     result = []
@@ -70,45 +83,68 @@ def aggregate_pq(
 
         # get data into df
         sub = pq_file.read_row_group(row_group, columns=all_cols)
-        df = sub.to_pandas()
-        if df.empty:
-            continue
 
         # add missing requested columns
-        add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug)
+        sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        # filter
-        if data_filter:
-            # filter based on the given requirements
-            apply_data_filter(data_filter_str, data_filter_sets, df)
+        if six.PY3:
+            if data_filter_expr is not None:
+                sub = sub.filter(data_filter_expr)
+
+            # unneeded columns (when we filter on a non-result column)
+            unneeded_columns = [col for col in sub.column_names if col not in input_cols]
+            if unneeded_columns:
+                sub = sub.drop_columns(unneeded_columns)
+
+            if preaggregate:
+                sub = groupby_py3(groupby_cols, agg, sub)
+
+            result.append(sub)
+        else:
+            df = sub.to_pandas()
             if df.empty:
-                # no values for this rowgroup
-                del sub
-                del row_group
-                del df
                 continue
 
-        # unneeded columns (when we filter on a non-result column)
-        unneeded_columns = [col for col in df if col not in input_cols]
-        if unneeded_columns:
-            df.drop(unneeded_columns, axis=1, inplace=True)
+            # filter
+            if data_filter:
+                # filter based on the given requirements
+                apply_data_filter(data_filter_str, data_filter_sets, df)
+                if df.empty:
+                    # no values for this rowgroup
+                    del sub
+                    del df
+                    continue
 
-        # save the result
-        result.append(df)
+            # unneeded columns (when we filter on a non-result column)
+            unneeded_columns = [col for col in df if col not in input_cols]
+            if unneeded_columns:
+                df.drop(unneeded_columns, axis=1, inplace=True)
 
-        # cleanup
-        del sub
-        del row_group
+            if preaggregate:
+                df = groupby_result(agg, df, groupby_cols, measure_cols)
+
+            # save the result
+            result.append(df)
+
+            # cleanup
+            del sub
 
     # combine results
     if debug:
         print('Combining results')
 
     if result:
-        if len(result) == 1:
-            df = result[0]
+        if six.PY3:
+            if len(result) == 1:
+                table = result[0]
+            else:
+                table = pa.concat_tables(result)
+            df = table.to_pandas()
         else:
-            df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
+            if len(result) == 1:
+                df = result[0]
+            else:
+                df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
 
         if aggregate:
             df = groupby_result(agg, df, groupby_cols, measure_cols)
@@ -131,6 +167,12 @@ def aggregate_pq(
     else:
         return pa.Table.from_pandas(df, preserve_index=False)
 
+def groupby_py3(groupby_cols, agg, table):
+    grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
+    rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
+    col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
+    return grouped_table.rename_columns(col_names)
+
 
 def create_empty_result(result_cols, as_df):
     df = pd.DataFrame(None, columns=result_cols)
@@ -141,21 +183,27 @@ def create_empty_result(result_cols, as_df):
     return res
 
 
-def add_missing_columns_to_df(df, measure_cols, all_cols, standard_missing_id, debug):
+def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing_id, debug):
     expected_measure_cols = [x[0] for x in measure_cols]
 
     for col in all_cols:
-        if col not in df:
-            if col in expected_measure_cols:
-                # missing measure columns get a 0.0 result
-                standard_value = 0.0
-            else:
-                # missing dimension columns get the standard id for missing values
-                standard_value = standard_missing_id
+        if col in table.column_names:
+            continue
 
-            if debug:
-                print('Adding missing column {} with standard value {}'.format(col, standard_value))
-            df[col] = standard_value
+        if col in expected_measure_cols:
+            # missing measure columns get a 0.0 result
+            standard_value = 0.0
+        else:
+            # missing dimension columns get the standard id for missing values
+            standard_value = standard_missing_id
+
+        if debug:
+            print('Adding missing column {} with standard value {}'.format(col, standard_value))
+
+        new_col = [standard_value] * len(table)
+        table = table.append_column(col, [new_col])
+
+    return table
 
 
 def aggregate_pa(
@@ -261,12 +309,43 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_str = ' and '.join([
-        col.replace('-', '_n_') + ' ' + sign + ' ' + str(values)
-        for col, sign, values in data_filter if not (isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH)])
-    data_filter_sets = [(col, sign, set(values)) for col, sign, values in data_filter
-                        if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH]
-    return data_filter_str, data_filter_sets
+    data_filter_strs = []
+    data_filter_sets = []
+    data_filter_expr = None
+    for col, sign, values in data_filter:
+        if six.PY2:
+            if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
+                data_filter_sets.append((col, sign, set(values)))
+            else:
+                data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
+            continue
+        else:
+            if sign == 'in':
+                expr = pc.field(col).isin(values)
+            elif sign in ['not in', 'nin']:
+                expr = ~pc.field(col).isin(values)
+            elif sign in ['=', '==']:
+                expr = pc.field(col) == values
+            elif sign == '!=':
+                expr = pc.field(col) != values
+            elif sign == '>':
+                expr = pc.field(col) > values
+            elif sign == '>=':
+                expr = pc.field(col) >= values
+            elif sign == '<=':
+                expr = pc.field(col) <= values
+            elif sign == '<':
+                expr = pc.field(col) < values
+            else:
+                raise NotImplementedError('Operation "{}" is not supported'.format(sign))
+
+            if data_filter_expr is None:
+                data_filter_expr = expr
+            else:
+                data_filter_expr = data_filter_expr & expr
+
+    data_filter_str = ' and '.join(data_filter_strs)
+    return data_filter_str, data_filter_sets, data_filter_expr
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
@@ -288,31 +367,35 @@ def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
         min_val = rg_col.statistics.min
         max_val = rg_col.statistics.max
 
-        # if the filter is not in the boundary of the range, then skip the rowgroup
-        if sign == 'in':
-            if not any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign == 'not in':
-            if any(min_val <= val <= max_val for val in values):
-                return True
-        elif sign in ['=', '==']:
-            if not min_val <= values <= max_val:
-                return True
-        elif sign == '!=':
-            if min_val <= values <= max_val:
-                return True
-        elif sign == '>':
-            if max_val <= values:
-                return True
-        elif sign == '>=':
-            if max_val < values:
-                return True
-        elif sign == '<':
-            if min_val >= values:
-                return True
-        elif sign == '<=':
-            if min_val > values:
-                return True
+        try:
+            # if the filter is not in the boundary of the range, then skip the rowgroup
+            if sign == 'in':
+                if not any(min_val <= val <= max_val for val in values):
+                    return True
+            elif sign == 'not in':
+                if any(min_val <= val <= max_val for val in values):
+                    return True
+            elif sign in ['=', '==']:
+                if not min_val <= values <= max_val:
+                    return True
+            elif sign == '!=':
+                if min_val <= values <= max_val:
+                    return True
+            elif sign == '>':
+                if max_val <= values:
+                    return True
+            elif sign == '>=':
+                if max_val < values:
+                    return True
+            elif sign == '<':
+                if min_val >= values:
+                    return True
+            elif sign == '<=':
+                if min_val > values:
+                    return True
+        except TypeError:
+            raise FilterValueError('Dimension filters MUST be numbers, please convert dimension values to dimension ids')
+
     return False
 
 
