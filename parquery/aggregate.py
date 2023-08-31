@@ -90,6 +90,9 @@ def aggregate_pq(
         if six.PY3:
             if data_filter_expr is not None:
                 sub = sub.filter(data_filter_expr)
+                if sub.num_rows == 0:
+                    del sub
+                    continue
 
             # unneeded columns (when we filter on a non-result column)
             unneeded_columns = [col for col in sub.column_names if col not in input_cols]
@@ -149,8 +152,7 @@ def aggregate_pq(
         if aggregate:
             df = groupby_result(agg, df, groupby_cols, measure_cols)
 
-        if row_group_filter is not None:
-            df = df.rename(columns={x[0]: x[2] for x in measure_cols})
+        df = df.rename(columns={x[0]: x[2] for x in measure_cols})
 
         # cleanup
         del result
