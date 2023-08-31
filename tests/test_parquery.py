@@ -1098,8 +1098,6 @@ class TestParquery(object):
         """
         test_where_terms00: get terms in one column bigger than a certain value
         """
-        # expected result
-        ref = []
 
         # generate data to filter on
         iterable = ((x * mult, x * mult) for x in range(5000) for mult in [1, 3])
