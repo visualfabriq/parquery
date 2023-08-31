@@ -6,11 +6,11 @@ import tempfile
 from contextlib import contextmanager
 
 import numpy as np
+from numpy.testing import assert_allclose
 import pandas as pd
 import pyarrow as pa
-from numpy.testing import assert_allclose
 
-from parquery import df_to_parquet, aggregate_pq, serialize_pa_table, deserialize_pa_table
+from parquery import df_to_parquet, aggregate_pq
 
 
 class TestParquery(object):
@@ -1076,17 +1076,6 @@ class TestParquery(object):
         assert result_parquery.empty is True
         assert sorted(list(result_parquery.columns)) == ['d1', 'd3', 'm1', 'm2']
 
-    def test_pa_serialization(self):
-        iterable = ((x, x) for x in range(20000))
-        data = np.fromiter(iterable, dtype='i8,i8')
-        df = pd.DataFrame(data)
-
-        data_table = pa.Table.from_pandas(df, preserve_index=False)
-        buf = serialize_pa_table(data_table)
-        data_table_2 = deserialize_pa_table(buf)
-
-        assert data_table == data_table_2
-
     def test_emtpy_file(self):
         """
         When a file is empty (does not contain any rows) it should still work.
@@ -1104,3 +1093,25 @@ class TestParquery(object):
 
         assert len(result_parquery) == 0
         assert set(result_parquery.columns) == {'f0', 'f1'}
+
+    def test_all_results_filtered(self):
+        """
+        test_where_terms00: get terms in one column bigger than a certain value
+        """
+
+        # generate data to filter on
+        iterable = ((x * mult, x * mult) for x in range(5000) for mult in [1, 3])
+        data = np.fromiter(iterable, dtype='i8,i8')
+
+        self.filename = tempfile.mkstemp(prefix='test-')[-1]
+        df_to_parquet(pd.DataFrame(data), self.filename)
+
+        # filter data
+        terms_filter = [('f0', 'in', [8000, 13000])]
+        result_parquery = aggregate_pq(self.filename, ['f0'], ['f1'],
+                                       data_filter=terms_filter,
+                                       aggregate=False)
+
+        # compare
+        assert not result_parquery.to_numpy()
+

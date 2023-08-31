@@ -2,6 +2,15 @@
 Release notes for parquery
 ========================
 
+Release  0.4.2
+==============
+- Fixed a bug where a rowgroup would be empty after filtering, causing strange NaN results after group by
+- Fixed a bug where column were not properly renamed after aggregation
+
+Release  0.4.1
+==============
+- Fixed broken serialization and added tests to verify
+
 Release  0.4.0
 ==============
 - Unpinned pyarrow since we have a newer version now
