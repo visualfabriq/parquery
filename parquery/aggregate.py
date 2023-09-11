@@ -21,7 +21,7 @@ SAFE_PREAGGREGATE = set([
 ])
 
 def _unify_aggregation_operators(aggregation_list):
-    rename_operators = {'std': 'stddev'} if six.PY3 else {'count_distinct': 'nunique'}
+    rename_operators = {'std': 'stddev'}
     return {x[0]: rename_operators.get(x[1], x[1]) for x in aggregation_list}
 
 def aggregate_pq(
@@ -197,10 +197,7 @@ def _combine_chunks(chunks):
     if len(chunks) == 1:
         return chunks[0]
 
-    if six.PY3:
-        return pa.concat_tables(chunks)
-
-    return pd.concat(chunks, axis=0, ignore_index=True, sort=False, copy=False)
+    return pa.concat_tables(chunks)
 
 def groupby_py3(groupby_cols, agg, table):
     if not agg:
@@ -290,43 +287,33 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_strs = []
-    data_filter_sets = []
     data_filter_expr = None
     for col, sign, values in data_filter:
-        if six.PY2:
-            if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
-                data_filter_sets.append((col, sign, set(values)))
-            else:
-                data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
-            continue
+        if sign == 'in':
+            expr = pc.field(col).isin(values)
+        elif sign in ['not in', 'nin']:
+            expr = ~pc.field(col).isin(values)
+        elif sign in ['=', '==']:
+            expr = pc.field(col) == values
+        elif sign == '!=':
+            expr = pc.field(col) != values
+        elif sign == '>':
+            expr = pc.field(col) > values
+        elif sign == '>=':
+            expr = pc.field(col) >= values
+        elif sign == '<=':
+            expr = pc.field(col) <= values
+        elif sign == '<':
+            expr = pc.field(col) < values
         else:
-            if sign == 'in':
-                expr = pc.field(col).isin(values)
-            elif sign in ['not in', 'nin']:
-                expr = ~pc.field(col).isin(values)
-            elif sign in ['=', '==']:
-                expr = pc.field(col) == values
-            elif sign == '!=':
-                expr = pc.field(col) != values
-            elif sign == '>':
-                expr = pc.field(col) > values
-            elif sign == '>=':
-                expr = pc.field(col) >= values
-            elif sign == '<=':
-                expr = pc.field(col) <= values
-            elif sign == '<':
-                expr = pc.field(col) < values
-            else:
-                raise NotImplementedError('Operation "{}" is not supported'.format(sign))
+            raise NotImplementedError('Operation "{}" is not supported'.format(sign))
 
-            if data_filter_expr is None:
-                data_filter_expr = expr
-            else:
-                data_filter_expr = data_filter_expr & expr
+        if data_filter_expr is None:
+            data_filter_expr = expr
+        else:
+            data_filter_expr = data_filter_expr & expr
 
-    data_filter_str = ' and '.join(data_filter_strs)
-    return data_filter_str, data_filter_sets, data_filter_expr
+    return '', [], data_filter_expr
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
