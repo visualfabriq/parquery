@@ -26,10 +26,10 @@ class TestParquery(object):
         shutil.rmtree(self.rootdir)
         self.rootdir = None
 
-    def setup(self):
+    def setup_method(self):
         self.filename = None
 
-    def teardown(self):
+    def teardown_method(self):
         if self.filename:
             os.remove(self.filename)
             self.filename = None
@@ -1112,5 +1112,5 @@ class TestParquery(object):
                                        aggregate=False)
 
         # compare
-        assert not result_parquery.to_numpy()
+        assert result_parquery.to_numpy().size == 0
 
