@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  0.5.0
+==============
+- Improved aggregation logic prefer pyarrow of pandas in python 3
+
 Release  0.4.2
 ==============
 - Fixed a bug where a rowgroup would be empty after filtering, causing strange NaN results after group by
