@@ -244,63 +244,6 @@ def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing
     return table
 
 
-def aggregate_pa(
-        pa_table,
-        groupby_cols,
-        measure_cols,
-        data_filter=None,
-        aggregate=True,
-        as_df=True,
-        debug=False):
-    """
-    A function to aggregate a arrow table using pandas
-    NB: we assume that all columns are strings
-
-    """
-    data_filter = data_filter or []
-
-    # check measure_cols
-    measure_cols = check_measure_cols(measure_cols)
-
-    # check which columns we need in total
-    _, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
-
-    df = pa_table.to_pandas()
-
-    # filter
-    if data_filter:
-        # filter based on the given requirements
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
-        apply_data_filter(data_filter_str, data_filter_sets, df)
-
-    # check if we have a result still
-    if df.empty:
-        return pd.DataFrame(None, columns=result_cols)
-
-    # unneeded columns (when we filter on a non-result column)
-    unneeded_columns = [col for col in df if col not in input_cols]
-    if unneeded_columns:
-        df.drop(unneeded_columns, axis=1, inplace=True)
-
-    # aggregate
-    if aggregate:
-        # create pandas-compliant aggregation
-        agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
-        # aggregate
-        df = groupby_result(agg, df, groupby_cols, measure_cols)
-
-    # rename the columns
-    df = df.rename(columns={x[0]: x[2] for x in measure_cols})
-
-    # ensure order
-    df = df[result_cols]
-
-    if as_df:
-        return df
-    else:
-        return pa.Table.from_pandas(df, preserve_index=False)
-
-
 def apply_data_filter(data_filter_str, data_filter_set, df):
     # filter on the straight eval
     if data_filter_str:
