@@ -109,11 +109,6 @@ workflows:
     jobs:
       - test:
           context: codeartifact-dev
-          name: py2
-          runtime: "2.7"
-
-      - test:
-          context: codeartifact-dev
           name: py37
           with-coverage: true
 
@@ -125,7 +120,6 @@ workflows:
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py2
             - py37
             - py310
           filters:
@@ -137,7 +131,6 @@ workflows:
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py2
             - py37
             - py310
           is-pre-release: true

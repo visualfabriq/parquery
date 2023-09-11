@@ -11,15 +11,8 @@ from __future__ import absolute_import
 
 import codecs
 import os
-from os.path import abspath
-from sys import version_info as v
 
 from setuptools import setup, find_packages
-
-# Check this Python version is supported
-if any([v < (2, 6), (3,) < v < (3, 7)]):
-    raise Exception("Unsupported Python version %d.%d. Requires Python == 2.7 "
-                    "or >= 3.7." % v[:2])
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -38,14 +31,10 @@ sources = []
 optional_libs = []
 install_requires = [
     'six',
-    'pyarrow==0.16.0;python_version=="2.7"',
-    'pyarrow>=12.0.0;python_version>="3.7"',
-    'pandas==0.24.2;python_version=="2.7"',
-    'pandas>=1.1;python_version>="3.7"',
-    'numpy==1.16.6;python_version=="2.7"',
-    'numpy>=1.19.1;python_version>="3.7"',
-    'numexpr==2.7.3;python_version=="2.7"',
-    'numexpr>=2.7.3;python_version>="3.7"'
+    'pyarrow>=12.0.0',
+    'pandas>=1.1',
+    'numpy>=1.19.1',
+    'numexpr>=2.7.3'
 ]
 setup_requires = []
 tests_requires = [
@@ -66,8 +55,6 @@ classifiers = [
     'Topic :: Software Development :: Libraries :: Python Modules',
     'Operating System :: Microsoft :: Windows',
     'Operating System :: Unix',
-    'Programming Language :: Python :: 2',
-    'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
