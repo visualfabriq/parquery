@@ -1,3 +1,4 @@
+import gc
 import os
 
 import pandas as pd
@@ -12,7 +13,16 @@ class FilterValueError(ValueError):
     pass
 
 FILTER_CUTOVER_LENGTH = 10
-SAFE_PREAGGREGATE = set(['min', 'max', 'sum'])
+SAFE_PREAGGREGATE = set([
+    'min',
+    'max',
+    'sum',
+    'one'
+])
+
+def _unify_aggregation_operators(aggregation_list):
+    rename_operators = {'std': 'stddev'} if six.PY3 else {'count_distinct': 'nunique'}
+    return {x[0]: rename_operators.get(x[1], x[1]) for x in aggregation_list}
 
 def aggregate_pq(
         file_name,
@@ -39,7 +49,7 @@ def aggregate_pq(
     all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
 
     # create pandas-compliant aggregation
-    agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
+    agg = _unify_aggregation_operators(measure_cols)
     agg_ops = set(agg.values())
     preaggregate = (
         aggregate
@@ -52,7 +62,11 @@ def aggregate_pq(
         return create_empty_result(result_cols, as_df)
 
     # get result
-    pq_file = pq.ParquetFile(file_name)
+    try:
+        pq_file = pq.ParquetFile(file_name)
+    except OSError:
+        gc.collect()
+        pq_file = pq.ParquetFile(file_name)
 
     # check if we have all dimensions from the filters
     for col, _, _ in data_filter:
@@ -82,7 +96,11 @@ def aggregate_pq(
                 continue
 
         # get data into df
-        sub = pq_file.read_row_group(row_group, columns=all_cols)
+        try:
+            sub = pq_file.read_row_group(row_group, columns=all_cols)
+        except OSError:
+            gc.collect()
+            sub = pq_file.read_row_group(row_group, columns=all_cols)
 
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
@@ -108,13 +126,15 @@ def aggregate_pq(
             if df.empty:
                 continue
 
+            # cleanup
+            del sub
+
             # filter
             if data_filter:
                 # filter based on the given requirements
                 apply_data_filter(data_filter_str, data_filter_sets, df)
                 if df.empty:
                     # no values for this rowgroup
-                    del sub
                     del df
                     continue
 
@@ -129,47 +149,63 @@ def aggregate_pq(
             # save the result
             result.append(df)
 
-            # cleanup
-            del sub
-
     # combine results
     if debug:
         print('Combining results')
 
-    if result:
-        if six.PY3:
-            if len(result) == 1:
-                table = result[0]
-            else:
-                table = pa.concat_tables(result)
-            df = table.to_pandas()
-        else:
-            if len(result) == 1:
-                df = result[0]
-            else:
-                df = pd.concat(result, axis=0, ignore_index=True, sort=False, copy=False)
+    if not result:
+        df = pd.DataFrame(None, columns=result_cols)
+        return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
+    combined_chunks = _combine_chunks(result)
+    del result
+
+    if six.PY3:
         if aggregate:
-            df = groupby_result(agg, df, groupby_cols, measure_cols)
+            table = groupby_py3(groupby_cols, agg, combined_chunks)
+        else:
+            table = combined_chunks
+
+        rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
+        if rename_columns:
+            new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
+            table = table.rename_columns(new_columns)
+
+        table = table.select(result_cols)
+
+        if not as_df:
+            return table
+
+        return table.to_pandas()
+
+    else:
+        if aggregate:
+            df = groupby_result(agg, combined_chunks, groupby_cols, measure_cols)
+        else:
+            df = combined_chunks
 
         df = df.rename(columns={x[0]: x[2] for x in measure_cols})
 
-        # cleanup
-        del result
+        # ensure order
+        df = df[result_cols]
+        if as_df:
+            return df
 
-    else:
-        # empty result
-        df = pd.DataFrame(None, columns=result_cols)
-
-    # ensure order
-    df = df[result_cols]
-
-    if as_df:
-        return df
-    else:
         return pa.Table.from_pandas(df, preserve_index=False)
 
+def _combine_chunks(chunks):
+    if len(chunks) == 1:
+        return chunks[0]
+
+    if six.PY3:
+        return pa.concat_tables(chunks)
+
+    return pd.concat(chunks, axis=0, ignore_index=True, sort=False, copy=False)
+
 def groupby_py3(groupby_cols, agg, table):
+    if not agg:
+        return table
+
     grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
     rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
