@@ -30,11 +30,9 @@ def read(*parts):
 sources = []
 optional_libs = []
 install_requires = [
-    'six',
     'pyarrow>=12.0.0',
     'pandas>=1.1',
-    'numpy>=1.19.1',
-    'numexpr>=2.7.3'
+    'numpy>=1.19.1'
 ]
 setup_requires = []
 tests_requires = [
@@ -46,11 +44,11 @@ extensions = []
 
 package_data = {}
 classifiers = [
-    'Development Status :: 4 - Beta',
+    'Development Status :: 5 - Production/Stable',
     'Intended Audience :: Developers',
     'Intended Audience :: Information Technology',
     'Intended Audience :: Science/Research',
-    'License :: OSI Approved :: BSD License',
+    'License :: OSI Approved :: MIT License',
     'Programming Language :: Python',
     'Topic :: Software Development :: Libraries :: Python Modules',
     'Operating System :: Microsoft :: Windows',
@@ -59,6 +57,7 @@ classifiers = [
     'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10'
 ]
 
 setup(
