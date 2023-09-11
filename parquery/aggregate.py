@@ -6,8 +6,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from parquery.tool import df_to_natural_name, df_to_original_name
-
 class FilterValueError(ValueError):
     pass
 
@@ -75,11 +73,9 @@ def aggregate_pq(
     # check filters
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter_str, data_filter_sets, data_filter_expr = convert_data_filter(data_filter)
+        data_filter_expr = convert_data_filter(data_filter)
     else:
         metadata_filter = None
-        data_filter_str = None
-        data_filter_sets = None
         data_filter_expr = None
 
     num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
@@ -196,8 +192,6 @@ def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing
     return table
 
 
-
-
 def convert_metadata_filter(data_filter, pq_file):
     # we check if we have INT type of columns to try to do pushdown statistics filtering
     metadata_filter = [
@@ -237,7 +231,7 @@ def convert_data_filter(data_filter):
         else:
             data_filter_expr = data_filter_expr & expr
 
-    return '', [], data_filter_expr
+    return data_filter_expr
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
