@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
-import six
 
 from parquery.tool import df_to_natural_name, df_to_original_name
 
@@ -105,49 +104,21 @@ def aggregate_pq(
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        if six.PY3:
-            if data_filter_expr is not None:
-                sub = sub.filter(data_filter_expr)
-                if sub.num_rows == 0:
-                    del sub
-                    continue
-
-            # unneeded columns (when we filter on a non-result column)
-            unneeded_columns = [col for col in sub.column_names if col not in input_cols]
-            if unneeded_columns:
-                sub = sub.drop_columns(unneeded_columns)
-
-            if preaggregate:
-                sub = groupby_py3(groupby_cols, agg, sub)
-
-            result.append(sub)
-        else:
-            df = sub.to_pandas()
-            if df.empty:
+        if data_filter_expr is not None:
+            sub = sub.filter(data_filter_expr)
+            if sub.num_rows == 0:
+                del sub
                 continue
 
-            # cleanup
-            del sub
+        # unneeded columns (when we filter on a non-result column)
+        unneeded_columns = [col for col in sub.column_names if col not in input_cols]
+        if unneeded_columns:
+            sub = sub.drop_columns(unneeded_columns)
 
-            # filter
-            if data_filter:
-                # filter based on the given requirements
-                apply_data_filter(data_filter_str, data_filter_sets, df)
-                if df.empty:
-                    # no values for this rowgroup
-                    del df
-                    continue
+        if preaggregate:
+            sub = groupby_py3(groupby_cols, agg, sub)
 
-            # unneeded columns (when we filter on a non-result column)
-            unneeded_columns = [col for col in df if col not in input_cols]
-            if unneeded_columns:
-                df.drop(unneeded_columns, axis=1, inplace=True)
-
-            if preaggregate:
-                df = groupby_result(agg, df, groupby_cols, measure_cols)
-
-            # save the result
-            result.append(df)
+        result.append(sub)
 
     # combine results
     if debug:
@@ -160,38 +131,22 @@ def aggregate_pq(
     combined_chunks = _combine_chunks(result)
     del result
 
-    if six.PY3:
-        if aggregate:
-            table = groupby_py3(groupby_cols, agg, combined_chunks)
-        else:
-            table = combined_chunks
-
-        rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
-        if rename_columns:
-            new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
-            table = table.rename_columns(new_columns)
-
-        table = table.select(result_cols)
-
-        if not as_df:
-            return table
-
-        return table.to_pandas()
-
+    if aggregate:
+        table = groupby_py3(groupby_cols, agg, combined_chunks)
     else:
-        if aggregate:
-            df = groupby_result(agg, combined_chunks, groupby_cols, measure_cols)
-        else:
-            df = combined_chunks
+        table = combined_chunks
 
-        df = df.rename(columns={x[0]: x[2] for x in measure_cols})
+    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
+    if rename_columns:
+        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
+        table = table.rename_columns(new_columns)
 
-        # ensure order
-        df = df[result_cols]
-        if as_df:
-            return df
+    table = table.select(result_cols)
 
-        return pa.Table.from_pandas(df, preserve_index=False)
+    if not as_df:
+        return table
+
+    return table.to_pandas()
 
 def _combine_chunks(chunks):
     if len(chunks) == 1:
@@ -241,37 +196,6 @@ def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing
     return table
 
 
-def apply_data_filter(data_filter_str, data_filter_set, df):
-    # filter on the straight eval
-    if data_filter_str:
-        df_to_natural_name(df)
-        mask = df.eval(data_filter_str)
-        df_to_original_name(df)
-        df.drop(df[~mask].index, inplace=True)
-
-    # filter on each longer list
-    if data_filter_set:
-        for col, sign, values in data_filter_set:
-            if sign == 'in':
-                mask = df[col].isin(values)
-                df.drop(df[~mask].index, inplace=True)
-            elif sign in ['not in', 'nin']:
-                mask = df[col].isin(values)
-                df.drop(df[mask].index, inplace=True)
-            else:
-                raise NotImplementedError('Unknown sign for set filter {}'.format(sign))
-
-
-def groupby_result(agg, df, groupby_cols, measure_cols):
-    if not agg:
-        return df.drop_duplicates()
-
-    if groupby_cols:
-        df = df.groupby(groupby_cols, as_index=False).agg(agg)
-    else:
-        ser = df.apply(agg)
-        df = pd.DataFrame([{col[0]: ser[col[0]] for col in measure_cols}])
-    return df
 
 
 def convert_metadata_filter(data_filter, pq_file):
