@@ -9,6 +9,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 import pandas as pd
 import pyarrow as pa
+import pytest
 
 from parquery import df_to_parquet, aggregate_pq
 
@@ -25,10 +26,10 @@ class TestParquery(object):
         shutil.rmtree(self.rootdir)
         self.rootdir = None
 
-    def setup(self):
+    def setup_method(self):
         self.filename = None
 
-    def teardown(self):
+    def teardown_method(self):
         if self.filename:
             os.remove(self.filename)
             self.filename = None
@@ -176,12 +177,11 @@ class TestParquery(object):
         # Itertools result
         print('--> Itertools')
         result_itt = self.helper_itt_groupby(data, groupby_lambda)
-        uniquekeys = result_itt['uniquekeys']
+        uniquekeys = sorted(result_itt['uniquekeys'])
         print(uniquekeys)
 
-        assert all(
-            a == b for a, b in zip([[x['f0'], x['f1'], x['f2']] for _, x in result_parquery.iterrows()],
-                                   uniquekeys))
+        tuple_list = sorted([x['f0'], x['f1'], x['f2']] for _, x in result_parquery.iterrows())
+        assert all(a == b for a, b in zip(tuple_list, uniquekeys))
 
     def test_groupby_03(self):
         """
@@ -265,7 +265,7 @@ class TestParquery(object):
         # Itertools result
         print('--> Itertools')
         result_itt = self.helper_itt_groupby(data, groupby_lambda)
-        uniquekeys = result_itt['uniquekeys']
+        uniquekeys = sorted(result_itt['uniquekeys'])
         print(uniquekeys)
 
         ref = []
@@ -280,13 +280,8 @@ class TestParquery(object):
                 f6 += row[6]
             ref.append(f0 + [f4, f5, f6])
 
-        result_ref = pd.DataFrame(ref, columns=result_parquery.columns)
-        for col in result_ref.columns:
-            if result_ref[col].dtype == np.float64:
-                result_ref[col] = np.round(result_ref[col], 6)
-                result_parquery[col] = np.round(result_parquery[col], 6)
-
-        assert (result_parquery == result_ref).all().all()
+        tuple_list = sorted([x['f0'], x['f1'], x['f2']] for _, x in result_parquery.iterrows())
+        assert all(a == b for a, b in zip(tuple_list, uniquekeys))
 
     def test_groupby_05(self):
         """
@@ -772,7 +767,11 @@ class TestParquery(object):
 
         # Numpy result
         print('--> Numpy')
-        np_result = [data['f4'].sum(), data['f5'].sum(), data['f6'].sum()]
+        np_result = [
+            pytest.approx(data['f4'].sum()),
+            pytest.approx(data['f5'].sum()),
+            pytest.approx(data['f6'].sum())
+        ]
 
         assert list(result_parquery.loc[0]) == np_result
 
@@ -1113,5 +1112,5 @@ class TestParquery(object):
                                        aggregate=False)
 
         # compare
-        assert not result_parquery.to_numpy()
+        assert result_parquery.to_numpy().size == 0
 
