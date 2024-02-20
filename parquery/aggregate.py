@@ -142,14 +142,12 @@ def finalize_group_by(
     if len(result) == 1:
         table = result[0]
     else:
-        combined_chunks = pa.concat_tables(result)
+        table = pa.concat_tables(result)
         del result
 
-        if aggregate:
-            agg = _unify_aggregation_operators(measure_cols)
-            table = groupby_py3(groupby_cols, agg, combined_chunks)
-        else:
-            table = combined_chunks
+    if aggregate:
+        agg = _unify_aggregation_operators(measure_cols)
+        table = groupby_py3(groupby_cols, agg, table)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
