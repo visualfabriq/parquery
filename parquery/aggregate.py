@@ -1,5 +1,6 @@
 import gc
 import os
+from typing import List
 
 import pandas as pd
 import pyarrow as pa
@@ -124,31 +125,39 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    combined_chunks = _combine_chunks(result)
-    del result
-
-    if aggregate:
-        table = groupby_py3(groupby_cols, agg, combined_chunks)
-    else:
-        table = combined_chunks
-
-    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
-    if rename_columns:
-        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
-        table = table.rename_columns(new_columns)
-
-    table = table.select(result_cols)
+    table = finalize_group_by(result, groupby_cols, measure_cols, result_cols, aggregate)
 
     if not as_df:
         return table
 
     return table.to_pandas()
 
-def _combine_chunks(chunks):
-    if len(chunks) == 1:
-        return chunks[0]
 
-    return pa.concat_tables(chunks)
+def finalize_group_by(
+        result: List[pa.Table],
+        groupby_cols,
+        measure_cols,
+        result_cols,
+        aggregate: bool):
+    if len(result) == 1:
+        table = result[0]
+    else:
+        combined_chunks = pa.concat_tables(result)
+        del result
+
+        if aggregate:
+            agg = _unify_aggregation_operators(measure_cols)
+            table = groupby_py3(groupby_cols, agg, combined_chunks)
+        else:
+            table = combined_chunks
+
+    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
+    if rename_columns:
+        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
+        table = table.rename_columns(new_columns)
+
+    return table.select(result_cols)
+
 
 def groupby_py3(groupby_cols, agg, table):
     if not agg:
