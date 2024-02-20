@@ -1,5 +1,6 @@
 import gc
 import os
+from typing import List
 
 import pandas as pd
 import pyarrow as pa
@@ -124,13 +125,7 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    combined_chunks = _combine_chunks(result)
-    del result
-
-    if aggregate:
-        table = groupby_py3(groupby_cols, agg, combined_chunks)
-    else:
-        table = combined_chunks
+    table = finalize_group_by(result, groupby_cols, agg, aggregate)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
@@ -144,11 +139,23 @@ def aggregate_pq(
 
     return table.to_pandas()
 
-def _combine_chunks(chunks):
-    if len(chunks) == 1:
-        return chunks[0]
 
-    return pa.concat_tables(chunks)
+def finalize_group_by(
+        result: List[pa.Table],
+        groupby_cols,
+        agg,
+        aggregate: bool):
+    if len(result) == 1:
+        table = result[0]
+    else:
+        table = pa.concat_tables(result)
+        del result
+
+    if aggregate:
+        table = groupby_py3(groupby_cols, agg, table)
+
+    return table
+
 
 def groupby_py3(groupby_cols, agg, table):
     if not agg:
