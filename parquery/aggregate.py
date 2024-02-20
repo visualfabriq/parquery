@@ -125,7 +125,14 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    table = finalize_group_by(result, groupby_cols, measure_cols, result_cols, aggregate)
+    table = finalize_group_by(result, groupby_cols, measure_cols, aggregate)
+
+    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
+    if rename_columns:
+        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
+        table = table.rename_columns(new_columns)
+
+    table = table.select(result_cols)
 
     if not as_df:
         return table
@@ -137,7 +144,6 @@ def finalize_group_by(
         result: List[pa.Table],
         groupby_cols,
         measure_cols,
-        result_cols,
         aggregate: bool):
     if len(result) == 1:
         table = result[0]
@@ -149,12 +155,7 @@ def finalize_group_by(
         agg = _unify_aggregation_operators(measure_cols)
         table = groupby_py3(groupby_cols, agg, table)
 
-    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
-    if rename_columns:
-        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
-        table = table.rename_columns(new_columns)
-
-    return table.select(result_cols)
+    return table
 
 
 def groupby_py3(groupby_cols, agg, table):
