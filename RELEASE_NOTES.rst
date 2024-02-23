@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  1.1.0
+==============
+- Add new group_by logic to allow more efficient querying
+
 Release  0.5.1
 ==============
 - Remove numexpr as a dependency for python 2 because it's causing problems

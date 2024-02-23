@@ -1,13 +1,11 @@
 import gc
 import os
+from typing import List
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
-import six
-
-from parquery.tool import df_to_natural_name, df_to_original_name
 
 class FilterValueError(ValueError):
     pass
@@ -21,7 +19,7 @@ SAFE_PREAGGREGATE = set([
 ])
 
 def _unify_aggregation_operators(aggregation_list):
-    rename_operators = {'std': 'stddev'} if six.PY3 else {'count_distinct': 'nunique'}
+    rename_operators = {'std': 'stddev'}
     return {x[0]: rename_operators.get(x[1], x[1]) for x in aggregation_list}
 
 def aggregate_pq(
@@ -76,11 +74,9 @@ def aggregate_pq(
     # check filters
     if data_filter:
         metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter_str, data_filter_sets, data_filter_expr = convert_data_filter(data_filter)
+        data_filter_expr = convert_data_filter(data_filter)
     else:
         metadata_filter = None
-        data_filter_str = None
-        data_filter_sets = None
         data_filter_expr = None
 
     num_row_groups = [row_group_filter] if row_group_filter is not None else range(pq_file.num_row_groups)
@@ -105,49 +101,21 @@ def aggregate_pq(
         # add missing requested columns
         sub = add_missing_columns_to_table(sub, measure_cols, all_cols, standard_missing_id, debug)
 
-        if six.PY3:
-            if data_filter_expr is not None:
-                sub = sub.filter(data_filter_expr)
-                if sub.num_rows == 0:
-                    del sub
-                    continue
-
-            # unneeded columns (when we filter on a non-result column)
-            unneeded_columns = [col for col in sub.column_names if col not in input_cols]
-            if unneeded_columns:
-                sub = sub.drop_columns(unneeded_columns)
-
-            if preaggregate:
-                sub = groupby_py3(groupby_cols, agg, sub)
-
-            result.append(sub)
-        else:
-            df = sub.to_pandas()
-            if df.empty:
+        if data_filter_expr is not None:
+            sub = sub.filter(data_filter_expr)
+            if sub.num_rows == 0:
+                del sub
                 continue
 
-            # cleanup
-            del sub
+        # unneeded columns (when we filter on a non-result column)
+        unneeded_columns = [col for col in sub.column_names if col not in input_cols]
+        if unneeded_columns:
+            sub = sub.drop_columns(unneeded_columns)
 
-            # filter
-            if data_filter:
-                # filter based on the given requirements
-                apply_data_filter(data_filter_str, data_filter_sets, df)
-                if df.empty:
-                    # no values for this rowgroup
-                    del df
-                    continue
+        if preaggregate:
+            sub = groupby_py3(groupby_cols, agg, sub)
 
-            # unneeded columns (when we filter on a non-result column)
-            unneeded_columns = [col for col in df if col not in input_cols]
-            if unneeded_columns:
-                df.drop(unneeded_columns, axis=1, inplace=True)
-
-            if preaggregate:
-                df = groupby_result(agg, df, groupby_cols, measure_cols)
-
-            # save the result
-            result.append(df)
+        result.append(sub)
 
     # combine results
     if debug:
@@ -157,50 +125,37 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    combined_chunks = _combine_chunks(result)
-    del result
+    table = finalize_group_by(result, groupby_cols, agg, aggregate)
 
-    if six.PY3:
-        if aggregate:
-            table = groupby_py3(groupby_cols, agg, combined_chunks)
-        else:
-            table = combined_chunks
+    rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
+    if rename_columns:
+        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
+        table = table.rename_columns(new_columns)
 
-        rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
-        if rename_columns:
-            new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
-            table = table.rename_columns(new_columns)
+    table = table.select(result_cols)
 
-        table = table.select(result_cols)
+    if not as_df:
+        return table
 
-        if not as_df:
-            return table
+    return table.to_pandas()
 
-        return table.to_pandas()
 
+def finalize_group_by(
+        result: List[pa.Table],
+        groupby_cols,
+        agg,
+        aggregate: bool):
+    if len(result) == 1:
+        table = result[0]
     else:
-        if aggregate:
-            df = groupby_result(agg, combined_chunks, groupby_cols, measure_cols)
-        else:
-            df = combined_chunks
+        table = pa.concat_tables(result)
+        del result
 
-        df = df.rename(columns={x[0]: x[2] for x in measure_cols})
+    if aggregate:
+        table = groupby_py3(groupby_cols, agg, table)
 
-        # ensure order
-        df = df[result_cols]
-        if as_df:
-            return df
+    return table
 
-        return pa.Table.from_pandas(df, preserve_index=False)
-
-def _combine_chunks(chunks):
-    if len(chunks) == 1:
-        return chunks[0]
-
-    if six.PY3:
-        return pa.concat_tables(chunks)
-
-    return pd.concat(chunks, axis=0, ignore_index=True, sort=False, copy=False)
 
 def groupby_py3(groupby_cols, agg, table):
     if not agg:
@@ -244,96 +199,6 @@ def add_missing_columns_to_table(table, measure_cols, all_cols, standard_missing
     return table
 
 
-def aggregate_pa(
-        pa_table,
-        groupby_cols,
-        measure_cols,
-        data_filter=None,
-        aggregate=True,
-        as_df=True,
-        debug=False):
-    """
-    A function to aggregate a arrow table using pandas
-    NB: we assume that all columns are strings
-
-    """
-    data_filter = data_filter or []
-
-    # check measure_cols
-    measure_cols = check_measure_cols(measure_cols)
-
-    # check which columns we need in total
-    _, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
-
-    df = pa_table.to_pandas()
-
-    # filter
-    if data_filter:
-        # filter based on the given requirements
-        data_filter_str, data_filter_sets = convert_data_filter(data_filter)
-        apply_data_filter(data_filter_str, data_filter_sets, df)
-
-    # check if we have a result still
-    if df.empty:
-        return pd.DataFrame(None, columns=result_cols)
-
-    # unneeded columns (when we filter on a non-result column)
-    unneeded_columns = [col for col in df if col not in input_cols]
-    if unneeded_columns:
-        df.drop(unneeded_columns, axis=1, inplace=True)
-
-    # aggregate
-    if aggregate:
-        # create pandas-compliant aggregation
-        agg = {x[0]: x[1].replace('count_distinct', 'nunique') for x in measure_cols}
-        # aggregate
-        df = groupby_result(agg, df, groupby_cols, measure_cols)
-
-    # rename the columns
-    df = df.rename(columns={x[0]: x[2] for x in measure_cols})
-
-    # ensure order
-    df = df[result_cols]
-
-    if as_df:
-        return df
-    else:
-        return pa.Table.from_pandas(df, preserve_index=False)
-
-
-def apply_data_filter(data_filter_str, data_filter_set, df):
-    # filter on the straight eval
-    if data_filter_str:
-        df_to_natural_name(df)
-        mask = df.eval(data_filter_str)
-        df_to_original_name(df)
-        df.drop(df[~mask].index, inplace=True)
-
-    # filter on each longer list
-    if data_filter_set:
-        for col, sign, values in data_filter_set:
-            if sign == 'in':
-                mask = df[col].isin(values)
-                df.drop(df[~mask].index, inplace=True)
-            elif sign in ['not in', 'nin']:
-                mask = df[col].isin(values)
-                df.drop(df[mask].index, inplace=True)
-            else:
-                raise NotImplementedError('Unknown sign for set filter {}'.format(sign))
-
-
-def groupby_result(agg, df, groupby_cols, measure_cols):
-    if not agg:
-        return df.drop_duplicates()
-
-    if groupby_cols:
-        df = df.groupby(groupby_cols, as_index=False).agg(agg)
-    else:
-        ser = df.apply(agg)
-        df = pd.DataFrame([{col[0]: ser[col[0]] for col in measure_cols}])
-    return df
-
-
 def convert_metadata_filter(data_filter, pq_file):
     # we check if we have INT type of columns to try to do pushdown statistics filtering
     metadata_filter = [
@@ -347,43 +212,33 @@ def convert_metadata_filter(data_filter, pq_file):
 
 
 def convert_data_filter(data_filter):
-    data_filter_strs = []
-    data_filter_sets = []
     data_filter_expr = None
     for col, sign, values in data_filter:
-        if six.PY2:
-            if isinstance(values, list) and len(values) > FILTER_CUTOVER_LENGTH:
-                data_filter_sets.append((col, sign, set(values)))
-            else:
-                data_filter_strs.append(col.replace('-', '_n_') + ' ' + sign + ' ' + str(values))
-            continue
+        if sign == 'in':
+            expr = pc.field(col).isin(values)
+        elif sign in ['not in', 'nin']:
+            expr = ~pc.field(col).isin(values)
+        elif sign in ['=', '==']:
+            expr = pc.field(col) == values
+        elif sign == '!=':
+            expr = pc.field(col) != values
+        elif sign == '>':
+            expr = pc.field(col) > values
+        elif sign == '>=':
+            expr = pc.field(col) >= values
+        elif sign == '<=':
+            expr = pc.field(col) <= values
+        elif sign == '<':
+            expr = pc.field(col) < values
         else:
-            if sign == 'in':
-                expr = pc.field(col).isin(values)
-            elif sign in ['not in', 'nin']:
-                expr = ~pc.field(col).isin(values)
-            elif sign in ['=', '==']:
-                expr = pc.field(col) == values
-            elif sign == '!=':
-                expr = pc.field(col) != values
-            elif sign == '>':
-                expr = pc.field(col) > values
-            elif sign == '>=':
-                expr = pc.field(col) >= values
-            elif sign == '<=':
-                expr = pc.field(col) <= values
-            elif sign == '<':
-                expr = pc.field(col) < values
-            else:
-                raise NotImplementedError('Operation "{}" is not supported'.format(sign))
+            raise NotImplementedError('Operation "{}" is not supported'.format(sign))
 
-            if data_filter_expr is None:
-                data_filter_expr = expr
-            else:
-                data_filter_expr = data_filter_expr & expr
+        if data_filter_expr is None:
+            data_filter_expr = expr
+        else:
+            data_filter_expr = data_filter_expr & expr
 
-    data_filter_str = ' and '.join(data_filter_strs)
-    return data_filter_str, data_filter_sets, data_filter_expr
+    return data_filter_expr
 
 
 def rowgroup_metadata_filter(metadata_filter, pq_file, row_group):
