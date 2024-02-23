@@ -44,7 +44,6 @@ install_requires = [
     'pandas>=1.1;python_version>="3.7"',
     'numpy==1.16.6;python_version=="2.7"',
     'numpy>=1.19.1;python_version>="3.7"',
-    'numexpr==2.7.3;python_version=="2.7"',
     'numexpr>=2.7.3;python_version>="3.7"'
 ]
 setup_requires = []
