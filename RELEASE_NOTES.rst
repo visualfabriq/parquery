@@ -6,6 +6,10 @@ Release  1.1.0
 ==============
 - Add new group_by logic to allow more efficient querying
 
+Release  0.5.1
+==============
+- Remove numexpr as a dependency for python 2 because it's causing problems
+
 Release  0.5.0
 ==============
 - Improved aggregation logic prefer pyarrow of pandas in python 3
