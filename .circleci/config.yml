@@ -133,7 +133,7 @@ workflows:
               only:
                 - master
                 - main
-                - release/*
+                - release/0.5.1
 
       - build-and-push:
           context: codeartifact-dev
