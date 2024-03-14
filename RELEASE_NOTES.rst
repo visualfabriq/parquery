@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  1.1.1
+==============
+- Allow pre-aggregation even if no group_by is provided
+
 Release  1.1.0
 ==============
 - Add new group_by logic to allow more efficient querying
