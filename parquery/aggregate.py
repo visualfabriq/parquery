@@ -52,7 +52,6 @@ def aggregate_pq(
     preaggregate = (
         aggregate
         and agg_ops.issubset(SAFE_PREAGGREGATE)
-        and groupby_cols
     )
 
     # if the file does not exist, give back an empty result
