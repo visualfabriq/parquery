@@ -30,7 +30,7 @@ def read(*parts):
 sources = []
 optional_libs = []
 install_requires = [
-    'pyarrow==13.0.0',
+    'pyarrow==12.0.1',
     'pandas>=1.1',
     'numpy>=1.19.1'
 ]
