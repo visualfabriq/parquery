@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  1.1.2
+==============
+- Fix pyarrow to properly handle aggregation by sticking to 13.0.0 version
+
 Release  1.1.1
 ==============
 - Allow pre-aggregation even if no group_by is provided
