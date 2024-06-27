@@ -2,6 +2,22 @@
 Release notes for parquery
 ========================
 
+Release  1.1.2
+==============
+- Fix pyarrow to properly handle aggregation by sticking to 13.0.0 version
+
+Release  1.1.1
+==============
+- Allow pre-aggregation even if no group_by is provided
+
+Release  1.1.0
+==============
+- Add new group_by logic to allow more efficient querying
+
+Release  0.5.1
+==============
+- Remove numexpr as a dependency for python 2 because it's causing problems
+
 Release  0.5.0
 ==============
 - Improved aggregation logic prefer pyarrow of pandas in python 3

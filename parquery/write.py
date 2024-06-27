@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -6,7 +7,7 @@ import pyarrow.parquet as pq
 
 def df_to_parquet(df, filename, workdir=None, chunksize=100000, debug=False):
     if workdir:
-        full_filename = os.path.join(workdir, filename)
+        full_filename = pathlib.Path(workdir) / filename
     else:
         full_filename = filename
     writer = None

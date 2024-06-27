@@ -1,20 +1,11 @@
 import pyarrow as pa
-import six
 
 def serialize_df(df):
-    if six.PY2:
-        context = pa.default_serialization_context()
-        return context.serialize(df).to_buffer()
-    else:
-        return pa.serialize_pandas(df)
+    return pa.serialize_pandas(df)
 
 
 def deserialize_df(buf):
-    if six.PY2:
-        context = pa.default_serialization_context()
-        return context.deserialize(buf)
-    else:
-        return pa.deserialize_pandas(buf)
+    return pa.deserialize_pandas(buf)
 
 def serialize_pa_table(pa_table):
     sink = pa.BufferOutputStream()
