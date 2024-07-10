@@ -13,6 +13,11 @@ import codecs
 import os
 
 from setuptools import setup, find_packages
+from sys import version_info as v
+
+# Check this Python version is supported
+if v < (3, 11):
+    raise Exception("Unsupported Python version %d.%d. Requires Python >= 3.11 " % v[:2])
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -30,9 +35,9 @@ def read(*parts):
 sources = []
 optional_libs = []
 install_requires = [
+    'numpy>=2',
     'pyarrow>=12.0.0',
-    'pandas>=1.1',
-    'numpy>=1.19.1'
+    'pandas~=2.2.2',
 ]
 setup_requires = []
 tests_requires = [
@@ -54,10 +59,7 @@ classifiers = [
     'Operating System :: Microsoft :: Windows',
     'Operating System :: Unix',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9',
-    'Programming Language :: Python :: 3.10'
+    'Programming Language :: Python :: 3.11'
 ]
 
 setup(

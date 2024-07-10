@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  codeartifact: visualfabriq/codeartifact@1.1.1
+  codeartifact: visualfabriq/codeartifact@1.2.0
   coverage-reporter: codacy/coverage-reporter@13.6.0
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
       runtime:
         description: Python runtime version
         type: string
-        default: "3.7"
+        default: "3.11"
     docker:
       - image: cimg/python:<<parameters.runtime>>
 
@@ -109,31 +109,24 @@ workflows:
     jobs:
       - test:
           context: codeartifact-dev
-          name: py37
+          name: py311
+          runtime: "3.11"
           with-coverage: true
-
-      - test:
-          context: codeartifact-dev
-          name: py310
-          runtime: "3.10"
 
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py37
-            - py310
+            - py311
           filters:
             branches:
               only:
                 - master
                 - main
-                - release/0.5.1
 
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py37
-            - py310
+            - py311
           is-pre-release: true
           filters:
             branches:
