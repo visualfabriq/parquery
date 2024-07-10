@@ -110,7 +110,7 @@ workflows:
       - test:
           context: codeartifact-dev
           name: py311
-          runtime: "3.10"
+          runtime: "3.11"
           with-coverage: true
 
       - build-and-push:
