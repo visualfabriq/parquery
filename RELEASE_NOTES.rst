@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  1.2.0
+==============
+- Remove python 3.7 support and add python 3.11
+
 Release  1.1.1
 ==============
 - Allow pre-aggregation even if no group_by is provided
