@@ -16,8 +16,8 @@ from setuptools import setup, find_packages
 from sys import version_info as v
 
 # Check this Python version is supported
-if v < (3, 11):
-    raise Exception("Unsupported Python version %d.%d. Requires Python >= 3.11 " % v[:2])
+if v < (3, 7):
+    raise Exception("Unsupported Python version %d.%d. Requires Python >= 3.7" % v[:2])
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,7 +37,8 @@ optional_libs = []
 install_requires = [
     'numpy',
     'pyarrow>=12.0.0',
-    'pandas~=2.2.2',
+    'pandas<=1.1.5;python_version<"3.11"',
+    'pandas>=1.5.3;python_version>="3.11"',
 ]
 setup_requires = []
 tests_requires = [
@@ -58,7 +59,9 @@ classifiers = [
     'Topic :: Software Development :: Libraries :: Python Modules',
     'Operating System :: Microsoft :: Windows',
     'Operating System :: Unix',
+    'Programming Language :: Python',
     'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.11'
 ]
 
