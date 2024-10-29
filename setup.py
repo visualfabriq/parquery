@@ -36,7 +36,7 @@ sources = []
 optional_libs = []
 install_requires = [
     'numpy',
-    'pyarrow>=12.0.0',
+    'pyarrow~=18.0.0',
     'pandas<=1.1.5;python_version<"3.11"',
     'pandas>=1.5.3;python_version>="3.11"',
 ]
