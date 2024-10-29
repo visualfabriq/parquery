@@ -4,7 +4,7 @@ Release notes for parquery
 
 Release  1.2.0
 ==============
-- Remove python 3.7 support and add python 3.11
+- Remove python 3.7 pipelines and add python 3.11 support
 
 Release  1.1.1
 ==============
