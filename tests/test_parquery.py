@@ -13,7 +13,6 @@ import pytest
 
 from parquery import df_to_parquet, aggregate_pq
 
-
 class TestParquery(object):
     @contextmanager
     def on_disk_data_cleaner(self, data):
@@ -439,6 +438,23 @@ class TestParquery(object):
                 result_parquery[col] = np.round(result_parquery[col], 6)
 
         assert (result_parquery == result_ref).all().all()
+
+    def test_groupby_large(self):
+        """
+        test_groupby_large: Test groupby's group creation without cache, large dataset, large aggregation list
+        Groupby type 'sum'
+        """
+        random.seed(1)
+
+        groupby_cols = ['f0']
+        agg_list = [[f"m{i}", "sum", f"m{i}"] for i in range(1, 201)] # 200 elements of aggregation list
+
+        # -- ParQuery --
+        print('--> ParQuery')
+        filename = 'parquery/tests/test_data/random.parquet'
+
+        result_parquery = aggregate_pq(filename, groupby_cols, agg_list)
+        print(result_parquery)
 
     def _get_unique(self, values):
         new_values = []
