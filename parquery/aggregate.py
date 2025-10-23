@@ -42,6 +42,7 @@ def aggregate_pq(
 
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
+    complex_aggregation = len(measure_cols) >= 50
 
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
@@ -112,13 +113,15 @@ def aggregate_pq(
             sub = sub.drop_columns(unneeded_columns)
 
         if preaggregate:
-            sub = groupby_py3(groupby_cols, agg, sub)
+            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not complex_aggregation)
 
         result.append(sub)
 
-        del sub
-        gc.collect()
-        pa.default_memory_pool().release_unused()
+        if complex_aggregation:
+            # extra cleanup when we have a large aggregation list
+            del sub
+            gc.collect()
+            pa.default_memory_pool().release_unused()
 
 
     # combine results
@@ -129,7 +132,7 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    table = finalize_group_by(result, groupby_cols, agg, aggregate)
+    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not complex_aggregation)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
@@ -148,25 +151,25 @@ def finalize_group_by(
         result: List[pa.Table],
         groupby_cols,
         agg,
-        aggregate: bool):
+        aggregate: bool,
+        use_threads: bool = True):
     if len(result) == 1:
         table = result[0]
     else:
         table = pa.concat_tables(result)
         del result
-        gc.collect()
 
     if aggregate:
-        table = groupby_py3(groupby_cols, agg, table)
+        table = groupby_py3(groupby_cols, agg, table, use_threads=use_threads)
 
     return table
 
 
-def groupby_py3(groupby_cols, agg, table):
+def groupby_py3(groupby_cols, agg, table, use_threads=True):
     if not agg:
         return table
 
-    grouped_table = table.group_by(groupby_cols, use_threads=False).aggregate(list(agg.items()))
+    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(list(agg.items()))
     rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
