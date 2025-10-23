@@ -13,34 +13,6 @@ import pytest
 
 from parquery import df_to_parquet, aggregate_pq
 
-import os, psutil, threading, time
-
-def measure_peak_rss(func, *args, interval=0.05, **kwargs):
-    """
-    Run func(*args, **kwargs) and measure peak resident memory (RSS) in bytes.
-    Returns: (result, peak_rss_bytes)
-    """
-    proc = psutil.Process(os.getpid())
-    peak = 0
-    stop = False
-
-    def sampler():
-        nonlocal peak
-        while not stop:
-            rss = proc.memory_info().rss
-            if rss > peak:
-                peak = rss
-            time.sleep(interval)
-
-    t = threading.Thread(target=sampler, daemon=True)
-    t.start()
-    try:
-        result = func(*args, **kwargs)
-    finally:
-        stop = True
-        t.join()
-
-    return result, peak
 
 class TestParquery(object):
     @contextmanager
