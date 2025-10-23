@@ -1082,7 +1082,7 @@ class TestParquery(object):
         self.filename = tempfile.mkstemp(prefix='test-')[-1]
 
         data_table = pa.Table.from_pandas(pd.DataFrame(columns=['f0', 'f1']), preserve_index=False)
-        with pa.parquet.ParquetWriter(self.filename, data_table.schema, version='2.0', compression='ZSTD') as writer:
+        with pa.parquet.ParquetWriter(self.filename, data_table.schema, compression='ZSTD') as writer:
             writer.write_table(data_table)
 
         terms_filter = [('f0', '>', 10000)]
