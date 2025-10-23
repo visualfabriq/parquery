@@ -116,6 +116,11 @@ def aggregate_pq(
 
         result.append(sub)
 
+        del sub
+        gc.collect()
+        pa.default_memory_pool().release_unused()
+
+
     # combine results
     if debug:
         print('Combining results')
@@ -149,6 +154,7 @@ def finalize_group_by(
     else:
         table = pa.concat_tables(result)
         del result
+        gc.collect()
 
     if aggregate:
         table = groupby_py3(groupby_cols, agg, table)
@@ -160,7 +166,7 @@ def groupby_py3(groupby_cols, agg, table):
     if not agg:
         return table
 
-    grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
+    grouped_table = table.group_by(groupby_cols, use_threads=False).aggregate(list(agg.items()))
     rename_cols = {'{}_{}'.format(col, op): col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
