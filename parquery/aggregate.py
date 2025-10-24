@@ -42,7 +42,20 @@ def aggregate_pq(
 
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
-    complex_aggregation = len(measure_cols) >= 50
+
+    # determine if we have long aggregation list
+    # for long aggregations the RAM usage can spike high when using threads
+    # so we disable threads for long aggregations
+    # and do extra garbage collection
+
+    # when threads enabled for agg list == 200:
+    # Groupby py3 start: 4628.02 MB
+    # Groupby py3 end: 11119.95 MB --> high memory spike
+    # when threads disabled for agg list == 200:
+    # Groupby py3 start: 2911.80 MB
+    # Groupby py3 end: 6277.05 MB --> lower memory usage
+
+    long_aggregation_list = len(measure_cols) >= 50
 
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(data_filter, groupby_cols, measure_cols)
@@ -113,11 +126,11 @@ def aggregate_pq(
             sub = sub.drop_columns(unneeded_columns)
 
         if preaggregate:
-            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not complex_aggregation)
+            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not long_aggregation_list)
 
         result.append(sub)
 
-        if complex_aggregation:
+        if long_aggregation_list:
             # extra cleanup when we have a large aggregation list
             del sub
             gc.collect()
@@ -132,7 +145,7 @@ def aggregate_pq(
         df = pd.DataFrame(None, columns=result_cols)
         return df if as_df else pa.Table.from_pandas(df, preserve_index=False)
 
-    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not complex_aggregation)
+    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not long_aggregation_list)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
