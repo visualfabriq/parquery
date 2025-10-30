@@ -2,6 +2,10 @@
 Release notes for parquery
 ========================
 
+Release  1.2.1
+==============
+- Disable multi-threading for long aggregation lists to prevent high memory usage
+
 Release  1.2.0
 ==============
 - Remove python 3.7 pipelines and add python 3.11 support
