@@ -26,34 +26,40 @@ jobs:
     working_directory: ~/parquery
     steps:
       - checkout
+
       - run:
-          name: Activate virtualenv
-          command: virtualenv ~/venv
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
 
       - restore_cache:
           keys:
-            - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
-            - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies
+            - << parameters.resource-class >>-<< parameters.runtime >>-v2-uv-{{ checksum "setup.py" }}
+            - << parameters.resource-class >>-<< parameters.runtime >>-v2-uv
 
       - run:
-          name: Upgrade pip
-          command: |
-            ~/venv/bin/pip install --upgrade pip wheel
+          name: Create virtualenv with uv
+          command: uv venv ~/venv
 
       - codeartifact/init:
           tool: pip
 
       - run:
-          name: Install dependencies
+          name: Install dependencies with uv
           command: |
-            ~/venv/bin/pip install .[test]
+            source ~/venv/bin/activate
+            uv pip install .[test]
     
 
       # Save the cached dependencies
       - save_cache:
-          key: << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
+          key: << parameters.resource-class >>-<< parameters.runtime >>-v2-uv-{{ checksum "setup.py" }}
           paths:
             - ~/venv
+            - ~/.cache/uv
+            - ~/.cargo/bin/uv
 
       # Save git revision info
       - run:
