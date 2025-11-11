@@ -13,6 +13,7 @@ except ImportError:
 
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 # Type aliases for filter operations
@@ -176,64 +177,61 @@ def aggregate_pq(
     if not os.path.exists(file_name) and handle_missing_file:
         return create_empty_result(result_cols, as_df)
 
-    # get result
+    # Create dataset (replaces ParquetFile)
     try:
-        pq_file = pq.ParquetFile(file_name)
+        dataset = ds.dataset(file_name, format='parquet')
     except OSError:
         gc.collect()
-        pq_file = pq.ParquetFile(file_name)
+        dataset = ds.dataset(file_name, format='parquet')
 
     # check if we have all dimensions from the filters
+    schema_names = dataset.schema.names
     for col, _, _ in data_filter:
-        if col not in pq_file.metadata.schema.names:
+        if col not in schema_names:
             return create_empty_result(result_cols, as_df)
 
-    # check filters
-    if data_filter:
-        metadata_filter = convert_metadata_filter(data_filter, pq_file)
-        data_filter_expr = convert_data_filter(data_filter)
-    else:
-        metadata_filter = None
-        data_filter_expr = None
+    # Convert data filter to PyArrow expression (automatic push-down)
+    data_filter_expr = convert_data_filter(data_filter) if data_filter else None
 
-    num_row_groups = (
-        [row_group_filter]
-        if row_group_filter is not None
-        else range(pq_file.num_row_groups)
-    )
+    # Filter columns to only those that exist in the schema
+    # (missing columns will be added afterward)
+    existing_cols = [col for col in all_cols if col in schema_names]
+
+    # Get fragments (row groups) with automatic filter push-down
+    fragments = list(dataset.get_fragments(filter=data_filter_expr))
+
+    # Handle row_group_filter parameter for parallel processing
+    if row_group_filter is not None:
+        if row_group_filter < len(fragments):
+            fragments = [fragments[row_group_filter]]
+        else:
+            fragments = []
+
     result = []
-    for row_group in num_row_groups:
+    total_fragments = len(fragments)
+
+    for fragment_idx, fragment in enumerate(fragments):
         if debug:
             print(
-                "Aggregating row group "
-                + str(row_group + 1)
-                + " of "
-                + str(pq_file.num_row_groups)
+                f"Aggregating fragment {fragment_idx + 1} of {total_fragments}"
             )
 
-        # push down filter
-        if metadata_filter:
-            skip = rowgroup_metadata_filter(metadata_filter, pq_file, row_group)
-            if skip:
-                continue
-
-        # get data into df
+        # Read fragment with filter applied (only existing columns)
         try:
-            sub = pq_file.read_row_group(row_group, columns=all_cols)
+            sub = fragment.to_table(columns=existing_cols, filter=data_filter_expr)
         except OSError:
             gc.collect()
-            sub = pq_file.read_row_group(row_group, columns=all_cols)
+            sub = fragment.to_table(columns=existing_cols, filter=data_filter_expr)
+
+        # Skip if no rows after filtering
+        if sub.num_rows == 0:
+            del sub
+            continue
 
         # add missing requested columns
         sub = add_missing_columns_to_table(
             sub, measure_cols, all_cols, standard_missing_id, debug
         )
-
-        if data_filter_expr is not None:
-            sub = sub.filter(data_filter_expr)
-            if sub.num_rows == 0:
-                del sub
-                continue
 
         # unneeded columns (when we filter on a non-result column)
         unneeded_columns = [col for col in sub.column_names if col not in input_cols]
@@ -249,7 +247,7 @@ def aggregate_pq(
             # Extra cleanup only when we've pre-aggregated (data is now small)
             # Don't GC when keeping raw data for later concatenation
             # Note: Don't call release_unused() here - we're in a loop and will
-            # immediately need to reallocate for the next row group
+            # immediately need to reallocate for the next fragment
             gc.collect()
 
     # combine results
@@ -378,24 +376,6 @@ def add_missing_columns_to_table(
     return pa.Table.from_arrays(combined_arrays, schema=combined_schema)
 
 
-def convert_metadata_filter(
-    data_filter: DataFilter, pq_file: pq.ParquetFile
-) -> list[list[Any]]:
-    """Convert filter to metadata filter for push-down filtering."""
-    # we check if we have INT type of columns to try to do pushdown statistics filtering
-    metadata_filter = [
-        [pq_file.metadata.schema.names.index(col), sign, values]
-        for col, sign, values in data_filter
-    ]
-    metadata_filter = [
-        [col_nr, sign, values]
-        for col_nr, sign, values in metadata_filter
-        if pq_file.schema.column(col_nr).physical_type
-        in ["INT8", "INT16", "INT32", "INT64"]
-    ]
-    return metadata_filter
-
-
 def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
     """Convert filter list to PyArrow compute expression."""
     data_filter_expr = None
@@ -429,65 +409,6 @@ def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
             data_filter_expr = data_filter_expr & expr
 
     return data_filter_expr
-
-
-def rowgroup_metadata_filter(
-    metadata_filter: list[list[Any]], pq_file: pq.ParquetFile, row_group: int
-) -> bool:
-    """
-    Check if the filter applies, if the filter does not apply skip the row_group.
-
-    Args:
-        metadata_filter: List of filters e.g. [[0, '>', 10000]]
-        pq_file: PyArrow Parquet file to be checked
-        row_group: Row group index to check
-
-    Returns:
-        True if row_group should be skipped otherwise False
-    """
-    rg_meta = pq_file.metadata.row_group(row_group)
-    if rg_meta.num_rows == 0:
-        return True
-    for col_nr, sign, values in metadata_filter:
-        rg_col = rg_meta.column(col_nr)
-        min_val = rg_col.statistics.min
-        max_val = rg_col.statistics.max
-
-        try:
-            # if the filter is not in the boundary of the range, then skip the rowgroup
-            if sign == "in":
-                if not any(min_val <= val <= max_val for val in values):
-                    return True
-            elif sign == "not in":
-                if any(min_val <= val <= max_val for val in values):
-                    return True
-            elif sign in ["=", "=="]:
-                if not min_val <= values <= max_val:
-                    return True
-            elif sign == "!=":
-                if min_val <= values <= max_val:
-                    return True
-            elif sign == ">":
-                if max_val <= values:
-                    return True
-            elif sign == ">=":
-                if max_val < values:
-                    return True
-            elif sign == "<":
-                if min_val >= values:
-                    return True
-            elif sign == "<=":
-                if min_val > values:
-                    return True
-        except TypeError as e:
-            col_name = pq_file.metadata.schema.names[col_nr]
-            raise FilterValueError(
-                f"Filter value must be numeric for integer column '{col_name}'. "
-                f"Got {type(values).__name__} value(s): {values!r}. "
-                f"Please convert dimension values to numeric IDs before filtering."
-            ) from e
-
-    return False
 
 
 def check_measure_cols(measure_cols: list[str] | list[list[str]]) -> list[list[str]]:
