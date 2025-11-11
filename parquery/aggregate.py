@@ -176,10 +176,10 @@ def aggregate_pq(
 
     # Create dataset (replaces ParquetFile)
     try:
-        dataset = ds.dataset(file_name, format='parquet')
+        dataset = ds.dataset(file_name, format="parquet")
     except OSError:
         gc.collect()
-        dataset = ds.dataset(file_name, format='parquet')
+        dataset = ds.dataset(file_name, format="parquet")
 
     # check if we have all dimensions from the filters
     schema_names = dataset.schema.names
@@ -202,9 +202,7 @@ def aggregate_pq(
 
     for fragment_idx, fragment in enumerate(fragments):
         if debug:
-            print(
-                f"Aggregating fragment {fragment_idx + 1} of {total_fragments}"
-            )
+            print(f"Aggregating fragment {fragment_idx + 1} of {total_fragments}")
 
         # Read fragment with filter applied (only existing columns)
         try:
@@ -284,11 +282,12 @@ def finalize_group_by(
     else:
         table = pa.concat_tables(result)
         del result
-        gc.collect()  # Free memory from individual row group tables
-        pa.default_memory_pool().release_unused()  # Return memory to OS
 
     if aggregate:
         table = groupby_py3(groupby_cols, agg, table, use_threads=use_threads)
+
+    gc.collect()  # Free memory from individual row group tables
+    pa.default_memory_pool().release_unused()  # Return memory to OS
 
     return table
 
