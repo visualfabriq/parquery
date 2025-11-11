@@ -121,14 +121,17 @@ class TestEngineEquivalence:
             duckdb_result = pa.compute.take(duckdb_result, indices_db)
 
         # Check shape
-        assert pyarrow_result.num_rows == duckdb_result.num_rows, \
+        assert pyarrow_result.num_rows == duckdb_result.num_rows, (
             f"Row count mismatch: {pyarrow_result.num_rows} vs {duckdb_result.num_rows}"
-        assert pyarrow_result.num_columns == duckdb_result.num_columns, \
+        )
+        assert pyarrow_result.num_columns == duckdb_result.num_columns, (
             f"Column count mismatch: {pyarrow_result.num_columns} vs {duckdb_result.num_columns}"
+        )
 
         # Check column names
-        assert pyarrow_result.column_names == duckdb_result.column_names, \
+        assert pyarrow_result.column_names == duckdb_result.column_names, (
             f"Column names mismatch: {pyarrow_result.column_names} vs {duckdb_result.column_names}"
+        )
 
         # Compare values column by column
         for col_name in pyarrow_result.column_names:
@@ -140,28 +143,45 @@ class TestEngineEquivalence:
                 if pa_val is None and db_val is None:
                     continue
                 if pa_val is None or db_val is None:
-                    raise AssertionError(f"Null mismatch in column '{col_name}' row {i}")
+                    raise AssertionError(
+                        f"Null mismatch in column '{col_name}' row {i}"
+                    )
 
                 # Compare floats with tolerance
-                if isinstance(pa_val, (float, int)) and isinstance(db_val, (float, int)):
-                    if not math.isclose(float(pa_val), float(db_val),
-                                      rel_tol=10**(-decimal), abs_tol=10**(-decimal)):
+                if isinstance(pa_val, (float, int)) and isinstance(
+                    db_val, (float, int)
+                ):
+                    if not math.isclose(
+                        float(pa_val),
+                        float(db_val),
+                        rel_tol=10 ** (-decimal),
+                        abs_tol=10 ** (-decimal),
+                    ):
                         raise AssertionError(
                             f"Value mismatch in column '{col_name}' row {i}: "
                             f"{pa_val} != {db_val}"
                         )
                 else:
                     # Direct comparison for non-numeric types
-                    assert pa_val == db_val, \
+                    assert pa_val == db_val, (
                         f"Value mismatch in column '{col_name}' row {i}: {pa_val} != {db_val}"
+                    )
 
     def test_simple_sum(self, test_parquet_file):
         """Test simple sum aggregation."""
         pyarrow_result = aggregate_pq(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="pyarrow", as_df=False
+            test_parquet_file,
+            ["group_id"],
+            [["m1", "sum"]],
+            engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="duckdb", as_df=False
+            test_parquet_file,
+            ["group_id"],
+            [["m1", "sum"]],
+            engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -282,17 +302,13 @@ class TestEngineBackwardCompatibility:
 
     def test_pyarrow_direct_call(self, test_parquet_file):
         """Test direct call to aggregate_pq_pyarrow (always returns PyArrow Table)."""
-        result = aggregate_pq_pyarrow(
-            test_parquet_file, ["group_id"], [["m1", "sum"]]
-        )
+        result = aggregate_pq_pyarrow(test_parquet_file, ["group_id"], [["m1", "sum"]])
         assert isinstance(result, pa.Table)
         assert result.num_rows == 3
 
     @pytest.mark.skipif(not HAS_DUCKDB, reason="DuckDB not installed")
     def test_duckdb_direct_call(self, test_parquet_file):
         """Test direct call to aggregate_pq_duckdb (always returns PyArrow Table)."""
-        result = aggregate_pq_duckdb(
-            test_parquet_file, ["group_id"], [["m1", "sum"]]
-        )
+        result = aggregate_pq_duckdb(test_parquet_file, ["group_id"], [["m1", "sum"]])
         assert isinstance(result, pa.Table)
         assert result.num_rows == 3

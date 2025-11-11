@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import gc
 import os
-from typing import Any
 
 try:
-    import pandas as pd
+    import pandas as pd  # noqa: F401
 
     HAS_PANDAS = True
 except ImportError:
@@ -18,8 +17,6 @@ import pyarrow.dataset as ds
 # Import shared types from main aggregate module
 from parquery.aggregate import (
     DataFilter,
-    FilterOperator,
-    FilterValueError,
     SAFE_PREAGGREGATE,
 )
 

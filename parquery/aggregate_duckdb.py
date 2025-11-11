@@ -4,7 +4,7 @@ import os
 from typing import Any, Literal
 
 try:
-    import pandas as pd
+    import pandas as pd  # noqa: F401
 
     HAS_PANDAS = True
 except ImportError:
@@ -245,14 +245,14 @@ def _build_sql_query(
         for col in groupby_cols:
             if col in missing_cols:
                 # Missing groupby column - use literal value
-                select_parts.append(f"{missing_cols[col]} AS \"{col}\"")
+                select_parts.append(f'{missing_cols[col]} AS "{col}"')
             else:
                 select_parts.append(f'"{col}"')
 
         for col, op, output_name in measure_cols:
             if col in missing_cols:
                 # Missing measure column - always 0.0
-                select_parts.append(f"0.0 AS \"{output_name}\"")
+                select_parts.append(f'0.0 AS "{output_name}"')
             else:
                 op_upper = op.lower()
                 if op_upper in ["count_distinct", "sorted_count_distinct"]:
@@ -262,14 +262,14 @@ def _build_sql_query(
                     agg_expr = f'{sql_op}("{col}")'
 
                 # Handle NULL values with COALESCE and use output_name as alias
-                select_parts.append(f"COALESCE({agg_expr}, 0.0) AS \"{output_name}\"")
+                select_parts.append(f'COALESCE({agg_expr}, 0.0) AS "{output_name}"')
         select_clause = ", ".join(select_parts)
     else:
         # No aggregation, just select columns (with literals for missing ones)
         select_parts = []
         for col in all_cols:
             if col in missing_cols:
-                select_parts.append(f"{missing_cols[col]} AS \"{col}\"")
+                select_parts.append(f'{missing_cols[col]} AS "{col}"')
             else:
                 select_parts.append(f'"{col}"')
         select_clause = ", ".join(select_parts)
@@ -292,7 +292,9 @@ def _build_sql_query(
     if aggregate and groupby_cols:
         existing_groupby_cols = [col for col in groupby_cols if col not in missing_cols]
         if existing_groupby_cols:
-            group_by_clause = "GROUP BY " + ", ".join(f'"{col}"' for col in existing_groupby_cols)
+            group_by_clause = "GROUP BY " + ", ".join(
+                f'"{col}"' for col in existing_groupby_cols
+            )
 
     # Combine all parts
     query_parts = [f"SELECT {select_clause}", f"FROM {from_clause}"]

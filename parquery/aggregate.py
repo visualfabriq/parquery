@@ -10,7 +10,7 @@ except ImportError:
     HAS_PANDAS = False
 
 try:
-    import duckdb
+    import duckdb  # noqa: F401
 
     HAS_DUCKDB = True
 except ImportError:
@@ -155,7 +155,9 @@ def aggregate_pq(
             debug=debug,
         )
     else:
-        raise ValueError(f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'")
+        raise ValueError(
+            f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'"
+        )
 
     # Convert to pandas if requested (engines always return PyArrow Tables)
     if as_df:

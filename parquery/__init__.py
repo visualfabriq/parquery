@@ -58,7 +58,7 @@ __all__ = [
 
 # Add DuckDB function if available
 try:
-    from parquery.aggregate_duckdb import aggregate_pq_duckdb
+    from parquery.aggregate_duckdb import aggregate_pq_duckdb  # noqa: F401
 
     __all__.append("aggregate_pq_duckdb")
 except ImportError:
