@@ -12,10 +12,8 @@ from parquery import HAS_DUCKDB, aggregate_pq, aggregate_pq_pyarrow, df_to_parqu
 
 try:
     from parquery import aggregate_pq_duckdb
-
-    HAS_DUCKDB_MODULE = True
 except ImportError:
-    HAS_DUCKDB_MODULE = False
+    aggregate_pq_duckdb = None
 
 
 @pytest.fixture
@@ -107,40 +105,63 @@ class TestEngineEquivalence:
 
     def assert_results_equal(self, pyarrow_result, duckdb_result, decimal=5):
         """Assert two results are equal, handling float comparison."""
-        # Convert to pandas for easier comparison
-        if isinstance(pyarrow_result, pa.Table):
-            pyarrow_result = pyarrow_result.to_pandas()
-        if isinstance(duckdb_result, pa.Table):
-            duckdb_result = duckdb_result.to_pandas()
+        import math
 
-        # Sort by first column to ensure consistent ordering
-        first_col = pyarrow_result.columns[0]
-        pyarrow_result = pyarrow_result.sort_values(first_col).reset_index(drop=True)
-        duckdb_result = duckdb_result.sort_values(first_col).reset_index(drop=True)
+        # Ensure we're comparing PyArrow Tables
+        assert isinstance(pyarrow_result, pa.Table), "PyArrow result should be a Table"
+        assert isinstance(duckdb_result, pa.Table), "DuckDB result should be a Table"
+
+        # Sort both tables by first column for consistent ordering
+        if pyarrow_result.num_rows > 0:
+            first_col = pyarrow_result.column_names[0]
+            indices_pa = pa.compute.sort_indices(pyarrow_result[first_col])
+            pyarrow_result = pa.compute.take(pyarrow_result, indices_pa)
+
+            indices_db = pa.compute.sort_indices(duckdb_result[first_col])
+            duckdb_result = pa.compute.take(duckdb_result, indices_db)
 
         # Check shape
-        assert (
-            pyarrow_result.shape == duckdb_result.shape
-        ), f"Shape mismatch: {pyarrow_result.shape} vs {duckdb_result.shape}"
+        assert pyarrow_result.num_rows == duckdb_result.num_rows, \
+            f"Row count mismatch: {pyarrow_result.num_rows} vs {duckdb_result.num_rows}"
+        assert pyarrow_result.num_columns == duckdb_result.num_columns, \
+            f"Column count mismatch: {pyarrow_result.num_columns} vs {duckdb_result.num_columns}"
 
-        # Compare values with tolerance for floats
-        import pandas as pd
+        # Check column names
+        assert pyarrow_result.column_names == duckdb_result.column_names, \
+            f"Column names mismatch: {pyarrow_result.column_names} vs {duckdb_result.column_names}"
 
-        pd.testing.assert_frame_equal(
-            pyarrow_result,
-            duckdb_result,
-            check_dtype=False,  # Allow minor type differences
-            rtol=10 ** (-decimal),
-            atol=10 ** (-decimal),
-        )
+        # Compare values column by column
+        for col_name in pyarrow_result.column_names:
+            pa_col = pyarrow_result[col_name].to_pylist()
+            db_col = duckdb_result[col_name].to_pylist()
+
+            for i, (pa_val, db_val) in enumerate(zip(pa_col, db_col)):
+                # Handle None/null values
+                if pa_val is None and db_val is None:
+                    continue
+                if pa_val is None or db_val is None:
+                    raise AssertionError(f"Null mismatch in column '{col_name}' row {i}")
+
+                # Compare floats with tolerance
+                if isinstance(pa_val, (float, int)) and isinstance(db_val, (float, int)):
+                    if not math.isclose(float(pa_val), float(db_val),
+                                      rel_tol=10**(-decimal), abs_tol=10**(-decimal)):
+                        raise AssertionError(
+                            f"Value mismatch in column '{col_name}' row {i}: "
+                            f"{pa_val} != {db_val}"
+                        )
+                else:
+                    # Direct comparison for non-numeric types
+                    assert pa_val == db_val, \
+                        f"Value mismatch in column '{col_name}' row {i}: {pa_val} != {db_val}"
 
     def test_simple_sum(self, test_parquet_file):
         """Test simple sum aggregation."""
         pyarrow_result = aggregate_pq(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="pyarrow"
+            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="pyarrow", as_df=False
         )
         duckdb_result = aggregate_pq(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="duckdb"
+            test_parquet_file, ["group_id"], [["m1", "sum"]], engine="duckdb", as_df=False
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -151,12 +172,14 @@ class TestEngineEquivalence:
             ["group_id"],
             [["m1", "sum"], ["m2", "mean"], ["f0", "count"]],
             engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
             test_parquet_file,
             ["group_id"],
             [["m1", "sum"], ["m2", "mean"], ["f0", "count"]],
             engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -170,6 +193,7 @@ class TestEngineEquivalence:
             [["m1", "sum"]],
             data_filter=data_filter,
             engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
             test_parquet_file,
@@ -177,6 +201,7 @@ class TestEngineEquivalence:
             [["m1", "sum"]],
             data_filter=data_filter,
             engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -190,6 +215,7 @@ class TestEngineEquivalence:
             [["m1", "sum"]],
             data_filter=data_filter,
             engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
             test_parquet_file,
@@ -197,6 +223,7 @@ class TestEngineEquivalence:
             [["m1", "sum"]],
             data_filter=data_filter,
             engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -207,12 +234,14 @@ class TestEngineEquivalence:
             ["group_id"],
             [["m1", "min"], ["m2", "max"]],
             engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
             test_parquet_file,
             ["group_id"],
             [["m1", "min"], ["m2", "max"]],
             engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
@@ -223,20 +252,22 @@ class TestEngineEquivalence:
             ["group_id"],
             [["m1", "sum", "total_m1"], ["m2", "mean", "avg_m2"]],
             engine="pyarrow",
+            as_df=False,
         )
         duckdb_result = aggregate_pq(
             test_parquet_file,
             ["group_id"],
             [["m1", "sum", "total_m1"], ["m2", "mean", "avg_m2"]],
             engine="duckdb",
+            as_df=False,
         )
         self.assert_results_equal(pyarrow_result, duckdb_result)
 
-        # Check column names
-        assert "total_m1" in pyarrow_result.columns
-        assert "avg_m2" in pyarrow_result.columns
-        assert "total_m1" in duckdb_result.columns
-        assert "avg_m2" in duckdb_result.columns
+        # Check column names (use column_names for PyArrow Tables)
+        assert "total_m1" in pyarrow_result.column_names
+        assert "avg_m2" in pyarrow_result.column_names
+        assert "total_m1" in duckdb_result.column_names
+        assert "avg_m2" in duckdb_result.column_names
 
 
 class TestEngineBackwardCompatibility:
@@ -257,7 +288,7 @@ class TestEngineBackwardCompatibility:
         assert isinstance(result, pa.Table)
         assert result.num_rows == 3
 
-    @pytest.mark.skipif(not HAS_DUCKDB_MODULE, reason="DuckDB not installed")
+    @pytest.mark.skipif(not HAS_DUCKDB, reason="DuckDB not installed")
     def test_duckdb_direct_call(self, test_parquet_file):
         """Test direct call to aggregate_pq_duckdb (always returns PyArrow Table)."""
         result = aggregate_pq_duckdb(
