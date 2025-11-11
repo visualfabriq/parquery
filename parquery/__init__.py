@@ -18,7 +18,7 @@ from parquery.transport import (
 from parquery.write import df_to_parquet
 
 pre_release_version = os.getenv("PRE_RELEASE_VERSION", "")
-__version__: str = pre_release_version if pre_release_version else "1.2.0"
+__version__: str = pre_release_version if pre_release_version else "2.0.0"
 
 __all__ = [
     "aggregate_pq",

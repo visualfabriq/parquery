@@ -44,8 +44,7 @@ tests_requires = [
 ]
 extras_requires = [
     "numpy",
-    'pandas<=1.1.5;python_version<"3.11"',
-    'pandas>=1.5.3;python_version>="3.11"',
+    "pandas>=1.5.3",
     "polars>=0.19.0",
 ]
 extensions = []

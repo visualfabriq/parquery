@@ -7,7 +7,7 @@ requires = [
 ]
 
 [tool.black]
-target-version = ['py37', 'py311']
+target-version = ['py311', 'py312', 'py313', 'py314']
 exclude = '''
 (
   | \.egg
