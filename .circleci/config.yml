@@ -41,7 +41,7 @@ jobs:
 
       - run:
           name: Create virtualenv with uv
-          command: uv venv ~/venv
+          command: uv venv --clear ~/venv
 
       - codeartifact/init:
           tool: pip
