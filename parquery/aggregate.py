@@ -139,19 +139,25 @@ def aggregate_pq(
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
 
-    # determine if we have long aggregation list
-    # for long aggregations the RAM usage can spike high when using threads
-    # so we disable threads for long aggregations
-    # and do extra garbage collection
+    # Memory optimization strategies:
+    #
+    # 1. THREADING: Disable for many measures
+    #    - Benchmarks with threads enabled for 200 measures:
+    #      Groupby start: 4628.02 MB → end: 11119.95 MB (high spike)
+    #    - Benchmarks with threads disabled for 200 measures:
+    #      Groupby start: 2911.80 MB → end: 6277.05 MB (lower usage)
+    #    - Many measures = expensive to aggregate in parallel → disable threading
+    #
+    # 2. PRE-AGGREGATION: Disable for many dimensions
+    #    - Pre-aggregation normally saves memory by reducing data per row group
+    #    - BUT with high cardinality groupby (many dims), intermediate results are large
+    #    - Better to concat raw data and aggregate once than aggregate multiple times
 
-    # when threads enabled for agg list == 200:
-    # Groupby py3 start: 4628.02 MB
-    # Groupby py3 end: 11119.95 MB --> high memory spike
-    # when threads disabled for agg list == 200:
-    # Groupby py3 start: 2911.80 MB
-    # Groupby py3 end: 6277.05 MB --> lower memory usage
+    # Disable threading when we have many measures (expensive parallel aggregation)
+    disable_threads = len(measure_cols) >= 20
 
-    long_aggregation_list = len(measure_cols) >= 50
+    # Disable pre-aggregation when we have many dimensions (high cardinality groupby)
+    disable_preaggregate = len(groupby_cols) >= 5
 
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(
@@ -161,7 +167,12 @@ def aggregate_pq(
     # create pandas-compliant aggregation
     agg = _unify_aggregation_operators(measure_cols)
     agg_ops = set(agg.values())
-    preaggregate = aggregate and agg_ops.issubset(SAFE_PREAGGREGATE)
+    # Pre-aggregate only when safe operations AND not too many dimensions
+    preaggregate = (
+        aggregate
+        and agg_ops.issubset(SAFE_PREAGGREGATE)
+        and not disable_preaggregate
+    )
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
@@ -232,12 +243,12 @@ def aggregate_pq(
             sub = sub.drop_columns(unneeded_columns)
 
         if preaggregate:
-            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not long_aggregation_list)
+            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not disable_threads)
 
         result.append(sub)
 
-        if long_aggregation_list:
-            # extra cleanup when we have a large aggregation list
+        if disable_threads:
+            # extra cleanup when we have many measures (expensive aggregations)
             del sub
             gc.collect()
             pa.default_memory_pool().release_unused()
@@ -250,7 +261,7 @@ def aggregate_pq(
     if not result:
         return create_empty_result(result_cols, as_df)
 
-    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not long_aggregation_list)
+    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not disable_threads)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
