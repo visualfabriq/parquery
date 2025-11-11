@@ -44,7 +44,6 @@ def aggregate_pq(
     measure_cols: list[str] | list[list[str]],
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
-    row_group_filter: int | None = None,
     as_df: bool | None = None,
     standard_missing_id: int = -1,
     handle_missing_file: bool = True,
@@ -72,8 +71,6 @@ def aggregate_pq(
             Example: [['f0', 'in', [1, 2, 3]], ['f1', '>', 100]]
         aggregate: If True, performs groupby aggregation. If False, returns filtered
             rows without aggregation.
-        row_group_filter: Optional row group index to process. If None, processes all
-            row groups. Useful for parallel processing.
         as_df: Return type control:
             - None (default): Auto-detect - returns pandas DataFrame if pandas is
               installed, otherwise PyArrow Table
@@ -199,13 +196,6 @@ def aggregate_pq(
 
     # Get fragments (row groups) with automatic filter push-down
     fragments = list(dataset.get_fragments(filter=data_filter_expr))
-
-    # Handle row_group_filter parameter for parallel processing
-    if row_group_filter is not None:
-        if row_group_filter < len(fragments):
-            fragments = [fragments[row_group_filter]]
-        else:
-            fragments = []
 
     result = []
     total_fragments = len(fragments)
