@@ -100,6 +100,7 @@ Serialization and De-Serialization
 To serialize PyArrow tables for network transmission or storage, we have transport functions available:
 
 ### Binary Serialization (Bytes)
+
 Use for binary protocols, direct byte transmission, or maximum efficiency:
 
 ```python
