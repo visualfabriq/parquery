@@ -9,7 +9,7 @@ The ParQuery framework provides methods to perform query and aggregation operati
 
 Visualfabriq uses Parquet and ParQuery to reliably handle billions of records for our clients with real-time reporting and machine learning usage.
 
-ParQuery requires only **PyArrow** as a core dependency. Pandas, NumPy, and Polars are optional dependencies for DataFrame support. 
+ParQuery requires only **PyArrow** as a core dependency. Pandas, NumPy, and Polars are optional dependencies for DataFrame support.
 
 Aggregation
 --------
