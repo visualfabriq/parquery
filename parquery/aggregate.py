@@ -248,8 +248,9 @@ def aggregate_pq(
         if preaggregate and disable_threads:
             # Extra cleanup only when we've pre-aggregated (data is now small)
             # Don't GC when keeping raw data for later concatenation
+            # Note: Don't call release_unused() here - we're in a loop and will
+            # immediately need to reallocate for the next row group
             gc.collect()
-            pa.default_memory_pool().release_unused()
 
     # combine results
     if debug:
