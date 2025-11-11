@@ -73,9 +73,7 @@ def test_polars_large_dataframe():
         df_to_parquet(df, filename)
 
         # Aggregate
-        result = aggregate_pq(
-            filename, ["group"], [["value", "sum"]], as_df=False
-        )
+        result = aggregate_pq(filename, ["group"], [["value", "sum"]], as_df=False)
         assert result.num_rows == 3
 
         # Verify sums

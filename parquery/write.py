@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import pathlib
 from typing import TYPE_CHECKING
@@ -151,3 +152,4 @@ def _write_chunked_df(
 
     # cleanup
     del df
+    gc.collect()  # Free memory from DataFrame and intermediate tables

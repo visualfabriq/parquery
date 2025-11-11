@@ -32,9 +32,7 @@ def test_pyarrow_to_natural_name():
 
 def test_pyarrow_to_original_name():
     """Test converting PyArrow Table column names to original format."""
-    table = pa.table(
-        {"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]}
-    )
+    table = pa.table({"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]})
 
     result = df_to_original_name(table)
 
@@ -73,9 +71,7 @@ def test_pandas_to_natural_name():
 @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
 def test_pandas_to_original_name():
     """Test converting pandas DataFrame column names to original format."""
-    df = pd.DataFrame(
-        {"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]}
-    )
+    df = pd.DataFrame({"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]})
     original_id = id(df)
 
     result = df_to_original_name(df)
@@ -102,9 +98,7 @@ def test_polars_to_natural_name():
 @pytest.mark.skipif(not HAS_POLARS, reason="polars not installed")
 def test_polars_to_original_name():
     """Test converting Polars DataFrame column names to original format."""
-    df = pl.DataFrame(
-        {"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]}
-    )
+    df = pl.DataFrame({"col_n_1": [1, 2, 3], "col_n_2": [4, 5, 6], "normal": [7, 8, 9]})
 
     result = df_to_original_name(df)
 

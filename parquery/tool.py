@@ -23,7 +23,9 @@ except ImportError:
     HAS_POLARS = False
 
 
-def df_to_natural_name(df: pd.DataFrame | pl.DataFrame | pa.Table) -> pd.DataFrame | pl.DataFrame | pa.Table:
+def df_to_natural_name(
+    df: pd.DataFrame | pl.DataFrame | pa.Table,
+) -> pd.DataFrame | pl.DataFrame | pa.Table:
     """
     Convert DataFrame/Table column names from original to natural format.
     Replaces '-' with '_n_' in column names.
@@ -58,7 +60,9 @@ def df_to_natural_name(df: pd.DataFrame | pl.DataFrame | pa.Table) -> pd.DataFra
         )
 
 
-def df_to_original_name(df: pd.DataFrame | pl.DataFrame | pa.Table) -> pd.DataFrame | pl.DataFrame | pa.Table:
+def df_to_original_name(
+    df: pd.DataFrame | pl.DataFrame | pa.Table,
+) -> pd.DataFrame | pl.DataFrame | pa.Table:
     """
     Convert DataFrame/Table column names from natural to original format.
     Replaces '_n_' with '-' in column names.

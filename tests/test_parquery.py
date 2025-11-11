@@ -6,18 +6,14 @@ import shutil
 import statistics
 import tempfile
 from contextlib import contextmanager
+from importlib.util import find_spec
 
 import pyarrow as pa
 import pytest
 
 from parquery import aggregate_pq, df_to_parquet
 
-try:
-    import pandas as pd
-
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
+HAS_PANDAS = find_spec("pandas") is not None
 
 
 # Helper functions to replace numpy/pandas functionality
@@ -677,8 +673,13 @@ class TestParquery(object):
         # -- Data --
         g = self.gen_dataset_count_with_NA_08(num_rows)
         schema_7col = [
-            ("f0", "string"), ("f1", "double"), ("f2", "int64"), ("f3", "int32"),
-            ("f4", "double"), ("f5", "int64"), ("f6", "int32")
+            ("f0", "string"),
+            ("f1", "double"),
+            ("f2", "int64"),
+            ("f3", "int32"),
+            ("f4", "double"),
+            ("f5", "int64"),
+            ("f6", "int32"),
         ]
         table = create_table_from_generator(g, schema_7col)
         print("table")
@@ -798,8 +799,13 @@ class TestParquery(object):
         # -- Data --
         g = self.gen_dataset_count_with_NA_08(num_rows)
         schema_7col = [
-            ("f0", "string"), ("f1", "double"), ("f2", "int64"), ("f3", "int32"),
-            ("f4", "double"), ("f5", "int64"), ("f6", "int32")
+            ("f0", "string"),
+            ("f1", "double"),
+            ("f2", "int64"),
+            ("f3", "int32"),
+            ("f4", "double"),
+            ("f5", "int64"),
+            ("f6", "int32"),
         ]
         table = create_table_from_generator(g, schema_7col)
         print("table")
@@ -964,7 +970,9 @@ class TestParquery(object):
         result_data = [list(row.values())[1:] for row in result_parquery.to_pylist()]
         for i, (result_row, ref_row) in enumerate(zip(result_data, ref)):
             for j, (r, e) in enumerate(zip(result_row, ref_row)):
-                assert math.isclose(r, e, rel_tol=1e-10, abs_tol=1e-10), f"Row {i}, col {j}: {r} != {e}"
+                assert math.isclose(r, e, rel_tol=1e-10, abs_tol=1e-10), (
+                    f"Row {i}, col {j}: {r} != {e}"
+                )
 
     def test_groupby_11(self):
         """
@@ -1098,12 +1106,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", ">", 10000)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms01(self):
@@ -1124,12 +1140,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "<=", 10000)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms02(self):
@@ -1151,12 +1175,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "not in", exclude)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms03(self):
@@ -1178,12 +1210,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms_04(self):
@@ -1206,12 +1246,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms_05(self):
@@ -1234,12 +1282,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, [], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            [],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms_06(self):
@@ -1262,12 +1318,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, [], ["f1"], data_filter=terms_filter, aggregate=True, as_df=False
+            self.filename,
+            [],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=True,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_where_terms07(self):
@@ -1292,12 +1356,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_natural_notation(self):
@@ -1322,12 +1394,20 @@ class TestParquery(object):
         # filter data
         terms_filter = [("d-1", "in", include)]
         result_parquery = aggregate_pq(
-            self.filename, ["d-2"], ["m-1"], data_filter=terms_filter, aggregate=True, as_df=False
+            self.filename,
+            ["d-2"],
+            ["m-1"],
+            data_filter=terms_filter,
+            aggregate=True,
+            as_df=False,
         )
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_natural_notation_2(self):
@@ -1357,7 +1437,10 @@ class TestParquery(object):
 
         # compare
         assert all(
-            a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref)
+            a == b
+            for a, b in zip(
+                [list(row.values()) for row in result_parquery.to_pylist()], ref
+            )
         )
 
     def test_non_existing_column(self):
@@ -1377,7 +1460,12 @@ class TestParquery(object):
 
         # filter data
         result_parquery = aggregate_pq(
-            filename, ["d1", "d3"], ["m1", "m2"], data_filter=[], aggregate=True, as_df=False
+            filename,
+            ["d1", "d3"],
+            ["m1", "m2"],
+            data_filter=[],
+            aggregate=True,
+            as_df=False,
         )
 
         # compare
@@ -1420,7 +1508,12 @@ class TestParquery(object):
 
         terms_filter = [("f0", ">", 10000)]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         assert result_parquery.num_rows == 0
@@ -1441,7 +1534,12 @@ class TestParquery(object):
         # filter data
         terms_filter = [("f0", "in", [8000, 13000])]
         result_parquery = aggregate_pq(
-            self.filename, ["f0"], ["f1"], data_filter=terms_filter, aggregate=False, as_df=False
+            self.filename,
+            ["f0"],
+            ["f1"],
+            data_filter=terms_filter,
+            aggregate=False,
+            as_df=False,
         )
 
         # compare

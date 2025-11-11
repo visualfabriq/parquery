@@ -190,6 +190,7 @@ def finalize_group_by(
     else:
         table = pa.concat_tables(result)
         del result
+        gc.collect()  # Free memory from individual row group tables
 
     if aggregate:
         table = groupby_py3(groupby_cols, agg, table)
@@ -205,7 +206,7 @@ def groupby_py3(
         return table
 
     grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
-    rename_cols = {"{}_{}".format(col, op): col for col, op in agg.items()}
+    rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
 
@@ -238,10 +239,14 @@ def add_missing_columns_to_table(
     """Add missing columns to table with default values."""
     expected_measure_cols = [x[0] for x in measure_cols]
 
-    for col in all_cols:
-        if col in table.column_names:
-            continue
+    # Find all missing columns
+    missing_cols = [col for col in all_cols if col not in table.column_names]
+    if not missing_cols:
+        return table
 
+    # Build all missing columns at once to avoid O(N²) table copies
+    missing_data = {}
+    for col in missing_cols:
         if col in expected_measure_cols:
             # missing measure columns get a 0.0 result
             standard_value = 0.0
@@ -250,16 +255,16 @@ def add_missing_columns_to_table(
             standard_value = standard_missing_id
 
         if debug:
-            print(
-                "Adding missing column {} with standard value {}".format(
-                    col, standard_value
-                )
-            )
+            print(f"Adding missing column {col} with standard value {standard_value}")
 
-        new_col = [standard_value] * len(table)
-        table = table.append_column(col, [new_col])
+        missing_data[col] = [standard_value] * table.num_rows
 
-    return table
+    # Create missing columns table and combine with original
+    missing_table = pa.table(missing_data)
+    combined_schema = pa.schema(list(table.schema) + list(missing_table.schema))
+    combined_arrays = list(table.columns) + list(missing_table.columns)
+
+    return pa.Table.from_arrays(combined_arrays, schema=combined_schema)
 
 
 def convert_metadata_filter(
@@ -301,7 +306,7 @@ def convert_data_filter(data_filter: list[list[Any]]) -> pc.Expression | None:
         elif sign == "<":
             expr = pc.field(col) < values
         else:
-            raise NotImplementedError('Operation "{}" is not supported'.format(sign))
+            raise NotImplementedError(f'Operation "{sign}" is not supported')
 
         if data_filter_expr is None:
             data_filter_expr = expr
