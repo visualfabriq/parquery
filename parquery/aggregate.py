@@ -139,6 +139,20 @@ def aggregate_pq(
     # check measure_cols
     measure_cols = check_measure_cols(measure_cols)
 
+    # determine if we have long aggregation list
+    # for long aggregations the RAM usage can spike high when using threads
+    # so we disable threads for long aggregations
+    # and do extra garbage collection
+
+    # when threads enabled for agg list == 200:
+    # Groupby py3 start: 4628.02 MB
+    # Groupby py3 end: 11119.95 MB --> high memory spike
+    # when threads disabled for agg list == 200:
+    # Groupby py3 start: 2911.80 MB
+    # Groupby py3 end: 6277.05 MB --> lower memory usage
+
+    long_aggregation_list = len(measure_cols) >= 50
+
     # check which columns we need in total
     all_cols, input_cols, result_cols = get_cols(
         data_filter, groupby_cols, measure_cols
@@ -218,9 +232,16 @@ def aggregate_pq(
             sub = sub.drop_columns(unneeded_columns)
 
         if preaggregate:
-            sub = groupby_py3(groupby_cols, agg, sub)
+            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not long_aggregation_list)
 
         result.append(sub)
+
+        if long_aggregation_list:
+            # extra cleanup when we have a large aggregation list
+            del sub
+            gc.collect()
+            pa.default_memory_pool().release_unused()
+
 
     # combine results
     if debug:
@@ -229,7 +250,7 @@ def aggregate_pq(
     if not result:
         return create_empty_result(result_cols, as_df)
 
-    table = finalize_group_by(result, groupby_cols, agg, aggregate)
+    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not long_aggregation_list)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
@@ -257,6 +278,7 @@ def finalize_group_by(
     groupby_cols: list[str],
     agg: dict[str, str],
     aggregate: bool,
+    use_threads: bool = True
 ) -> pa.Table:
     if len(result) == 1:
         table = result[0]
@@ -266,19 +288,18 @@ def finalize_group_by(
         gc.collect()  # Free memory from individual row group tables
 
     if aggregate:
-        table = groupby_py3(groupby_cols, agg, table)
+        table = groupby_py3(groupby_cols, agg, table, use_threads=use_threads)
 
     return table
 
 
 def groupby_py3(
-    groupby_cols: list[str], agg: dict[str, str], table: pa.Table
+    groupby_cols: list[str], agg: dict[str, str], table: pa.Table, use_threads: bool=True
 ) -> pa.Table:
-    """Perform groupby aggregation on PyArrow table."""
     if not agg:
         return table
 
-    grouped_table = table.group_by(groupby_cols).aggregate(list(agg.items()))
+    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(list(agg.items()))
     rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
