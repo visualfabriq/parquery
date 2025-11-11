@@ -2,6 +2,15 @@
 Release notes for parquery
 ========================
 
+Release  2.0.0
+==============
+- Fully switch to pyarrow for all data handling and aggregation as the default engine
+- Add DuckDB as an optional backend for aggregation as a [performance] option for the install
+- Remove all dependencies on Numpy and Pandas
+- Drop support for older python versions, require minimum python 3.11
+- Add optional support for Pandas & Polars for specific functions
+- Further optimized memory usage
+
 Release  1.2.1
 ==============
 - Disable multi-threading for long aggregation lists to prevent high memory usage

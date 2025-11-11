@@ -11,9 +11,9 @@ from __future__ import absolute_import
 
 import codecs
 import os
-
-from setuptools import setup, find_packages
 from sys import version_info as v
+
+from setuptools import find_packages, setup
 
 # Check this Python version is supported
 if v < (3, 7):
@@ -35,60 +35,78 @@ def read(*parts):
 sources = []
 optional_libs = []
 install_requires = [
-    'numpy',
-    'pyarrow>=12.0.0',
-    'pandas<=1.1.5;python_version<"3.11"',
-    'pandas>=1.5.3;python_version>="3.11"',
+    "pyarrow>=22.0.0",
 ]
 setup_requires = []
 tests_requires = [
-    'pytest',
-    'coverage'
+    "pytest",
+    "coverage",
+    "duckdb>=1.0.0",  # Test both PyArrow and DuckDB engines
 ]
-extras_requires = []
+
+# Optional dependencies for DataFrame support
+dataframe_requires = [
+    "numpy",
+    "pandas>=1.5.3",
+    "polars>=0.19.0",
+]
+
+# Performance optimization with DuckDB
+performance_requires = [
+    "duckdb>=1.0.0",
+]
+
+# All optional dependencies
+all_requires = dataframe_requires + performance_requires
+
 extensions = []
 
 package_data = {}
 classifiers = [
-    'Development Status :: 5 - Production/Stable',
-    'Intended Audience :: Developers',
-    'Intended Audience :: Information Technology',
-    'Intended Audience :: Science/Research',
-    'License :: OSI Approved :: MIT License',
-    'Programming Language :: Python',
-    'Topic :: Software Development :: Libraries :: Python Modules',
-    'Operating System :: Microsoft :: Windows',
-    'Operating System :: Unix',
-    'Programming Language :: Python',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.11'
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Unix",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 setup(
     name="parquery",
-    description='A query and aggregation framework for Parquet',
+    description="A query and aggregation framework for Parquet",
     long_description=read("README.md"),
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     classifiers=classifiers,
-    author='Carst Vaartjes',
-    author_email='cvaartjes@visualfabriq.com',
-    maintainer='Jelle Verstraaten',
-    maintainer_email='jverstraaten@visualfabriq.com',
-    url='https://github.com/visualfabriq/parquery',
-    license='MIT',
-    platforms=['any'],
+    author="Carst Vaartjes",
+    author_email="cvaartjes@visualfabriq.com",
+    maintainer="Jelle Verstraaten",
+    maintainer_email="jverstraaten@visualfabriq.com",
+    url="https://github.com/visualfabriq/parquery",
+    license="MIT",
+    platforms=["any"],
     ext_modules=extensions,
     cmdclass={},
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=tests_requires,
-    extras_require=dict(
-        optional=extras_requires,
-        test=tests_requires
-    ),
+    extras_require={
+        "performance": performance_requires,
+        "dataframes": dataframe_requires,
+        "optional": all_requires,  # backwards compatibility
+        "all": all_requires,
+        "test": tests_requires,
+    },
     packages=find_packages(),
     package_data=package_data,
     include_package_data=True,
-    zip_safe=True
+    zip_safe=True,
 )

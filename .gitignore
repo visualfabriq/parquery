@@ -68,4 +68,8 @@ bench-data.bcolz
 /venv
 
 # Visual Studio Code IDE
-.vscode
+.vscode.venv/
+
+# Claude Code documentation (private)
+CLAUDE.md
+uv.lock
