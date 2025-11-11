@@ -194,49 +194,65 @@ def aggregate_pq(
     # (missing columns will be added afterward)
     existing_cols = [col for col in all_cols if col in schema_names]
 
-    # Get fragments (row groups) with automatic filter push-down
+    # Get fragments with automatic filter push-down
     fragments = list(dataset.get_fragments(filter=data_filter_expr))
 
     result = []
-    total_fragments = len(fragments)
+    total_row_groups = sum(len(fragment.row_groups) for fragment in fragments)
 
-    for fragment_idx, fragment in enumerate(fragments):
-        if debug:
-            print(f"Aggregating fragment {fragment_idx + 1} of {total_fragments}")
+    row_group_counter = 0
+    for fragment in fragments:
+        # Iterate row groups within each fragment for memory efficiency
+        for rg_info in fragment.row_groups:
+            row_group_counter += 1
+            if debug:
+                print(
+                    f"Aggregating row group {row_group_counter} of {total_row_groups}"
+                )
 
-        # Read fragment with filter applied (only existing columns)
-        try:
-            sub = fragment.to_table(columns=existing_cols, filter=data_filter_expr)
-        except OSError:
-            gc.collect()
-            sub = fragment.to_table(columns=existing_cols, filter=data_filter_expr)
+            # Read single row group using subset (memory efficient: ~100k rows at a time)
+            fragment_subset = fragment.subset(row_group_ids=[rg_info.id])
 
-        # Skip if no rows after filtering
-        if sub.num_rows == 0:
-            del sub
-            continue
+            try:
+                sub = fragment_subset.to_table(
+                    columns=existing_cols, filter=data_filter_expr
+                )
+            except OSError:
+                gc.collect()
+                sub = fragment_subset.to_table(
+                    columns=existing_cols, filter=data_filter_expr
+                )
 
-        # add missing requested columns
-        sub = add_missing_columns_to_table(
-            sub, measure_cols, all_cols, standard_missing_id, debug
-        )
+            # Skip if no rows after filtering
+            if sub.num_rows == 0:
+                del sub
+                continue
 
-        # unneeded columns (when we filter on a non-result column)
-        unneeded_columns = [col for col in sub.column_names if col not in input_cols]
-        if unneeded_columns:
-            sub = sub.drop_columns(unneeded_columns)
+            # add missing requested columns
+            sub = add_missing_columns_to_table(
+                sub, measure_cols, all_cols, standard_missing_id, debug
+            )
 
-        if preaggregate:
-            sub = groupby_py3(groupby_cols, agg, sub, use_threads=not disable_threads)
+            # unneeded columns (when we filter on a non-result column)
+            unneeded_columns = [
+                col for col in sub.column_names if col not in input_cols
+            ]
+            if unneeded_columns:
+                sub = sub.drop_columns(unneeded_columns)
 
-        result.append(sub)
+            if preaggregate:
+                sub = groupby_py3(
+                    groupby_cols, agg, sub, use_threads=not disable_threads
+                )
 
-        if preaggregate and disable_threads:
-            # Extra cleanup only when we've pre-aggregated (data is now small)
-            # Don't GC when keeping raw data for later concatenation
-            # Note: Don't call release_unused() here - we're in a loop and will
-            # immediately need to reallocate for the next fragment
-            gc.collect()
+            result.append(sub)
+
+            if preaggregate and disable_threads:
+                # Extra cleanup only when we've pre-aggregated (data is now small)
+                # Don't GC when keeping raw data for later concatenation
+                # Note: Don't call release_unused() here - we're in a loop and will
+                # immediately need to reallocate for the next row group
+                gc.collect()
 
     # combine results
     if debug:
