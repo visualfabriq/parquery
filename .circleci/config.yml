@@ -15,6 +15,11 @@ jobs:
         description: Python runtime version
         type: string
         default: "3.11"
+      resource-class:
+        description: Resource class (medium for x86, arm.medium for ARM64)
+        type: string
+        default: "medium"
+    resource_class: <<parameters.resource-class>>
     docker:
       - image: cimg/python:<<parameters.runtime>>
 
@@ -109,14 +114,23 @@ workflows:
     jobs:
       - test:
           context: codeartifact-dev
-          name: py311
+          name: py311-x86
           runtime: "3.11"
+          resource-class: "medium"
           with-coverage: true
+
+      - test:
+          context: codeartifact-dev
+          name: py311-arm64
+          runtime: "3.11"
+          resource-class: "arm.medium"
+          with-coverage: false
 
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py311
+            - py311-x86
+            - py311-arm64
           filters:
             branches:
               only:
@@ -126,7 +140,8 @@ workflows:
       - build-and-push:
           context: codeartifact-dev
           requires:
-            - py311
+            - py311-x86
+            - py311-arm64
           is-pre-release: true
           filters:
             branches:
