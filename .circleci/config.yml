@@ -35,23 +35,26 @@ jobs:
             - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
             - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies
 
+      - run:
+          name: Upgrade pip and check platform
+          command: |
+            ~/venv/bin/pip install --upgrade pip wheel
+            python3 --version
+            ldd --version || true
+            uname -m
+
       - when:
           condition:
             equal: [ "arm.medium", << parameters.resource-class >> ]
           steps:
             - run:
-                name: Install ARM64 build dependencies
+                name: Check ARM64 platform compatibility
                 command: |
-                  sudo apt-get update
-                  sudo apt-get install -y \
-                    cmake \
-                    build-essential \
-                    libssl-dev \
-                    libbz2-dev \
-                    libzstd-dev \
-                    liblz4-dev \
-                    libsnappy-dev \
-                    zlib1g-dev
+                  echo "Platform tags:"
+                  ~/venv/bin/python3 -c "import pip._internal.utils.compatibility_tags as ct; print('\n'.join(str(t) for t in ct.get_supported()))" | head -20
+                  echo "---"
+                  echo "Checking if PyArrow wheel is available:"
+                  ~/venv/bin/pip index versions pyarrow | grep "Available versions"
 
       - codeartifact/init:
           tool: pip
