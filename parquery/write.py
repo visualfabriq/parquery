@@ -196,3 +196,4 @@ def _write_chunked_df(
     # cleanup
     del df
     gc.collect()  # Free memory from DataFrame and intermediate tables
+    pa.default_memory_pool().release_unused()  # Return memory to OS

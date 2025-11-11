@@ -169,9 +169,7 @@ def aggregate_pq(
     agg_ops = set(agg.values())
     # Pre-aggregate only when safe operations AND not too many dimensions
     preaggregate = (
-        aggregate
-        and agg_ops.issubset(SAFE_PREAGGREGATE)
-        and not disable_preaggregate
+        aggregate and agg_ops.issubset(SAFE_PREAGGREGATE) and not disable_preaggregate
     )
 
     # if the file does not exist, give back an empty result
@@ -250,7 +248,6 @@ def aggregate_pq(
         if preaggregate and disable_threads:
             # Extra cleanup only when we've pre-aggregated (data is now small)
             # Don't GC when keeping raw data for later concatenation
-            del sub
             gc.collect()
             pa.default_memory_pool().release_unused()
 
@@ -261,7 +258,9 @@ def aggregate_pq(
     if not result:
         return create_empty_result(result_cols, as_df)
 
-    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not disable_threads)
+    table = finalize_group_by(
+        result, groupby_cols, agg, aggregate, use_threads=not disable_threads
+    )
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
@@ -289,7 +288,7 @@ def finalize_group_by(
     groupby_cols: list[str],
     agg: dict[str, str],
     aggregate: bool,
-    use_threads: bool = True
+    use_threads: bool = True,
 ) -> pa.Table:
     if len(result) == 1:
         table = result[0]
@@ -297,6 +296,7 @@ def finalize_group_by(
         table = pa.concat_tables(result)
         del result
         gc.collect()  # Free memory from individual row group tables
+        pa.default_memory_pool().release_unused()  # Return memory to OS
 
     if aggregate:
         table = groupby_py3(groupby_cols, agg, table, use_threads=use_threads)
@@ -305,12 +305,17 @@ def finalize_group_by(
 
 
 def groupby_py3(
-    groupby_cols: list[str], agg: dict[str, str], table: pa.Table, use_threads: bool=True
+    groupby_cols: list[str],
+    agg: dict[str, str],
+    table: pa.Table,
+    use_threads: bool = True,
 ) -> pa.Table:
     if not agg:
         return table
 
-    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(list(agg.items()))
+    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(
+        list(agg.items())
+    )
     rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
