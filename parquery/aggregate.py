@@ -247,12 +247,12 @@ def aggregate_pq(
 
         result.append(sub)
 
-        if disable_threads:
-            # extra cleanup when we have many measures (expensive aggregations)
+        if preaggregate and disable_threads:
+            # Extra cleanup only when we've pre-aggregated (data is now small)
+            # Don't GC when keeping raw data for later concatenation
             del sub
             gc.collect()
             pa.default_memory_pool().release_unused()
-
 
     # combine results
     if debug:
