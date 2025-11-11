@@ -4,6 +4,9 @@ import os
 
 from parquery.aggregate import (
     SAFE_PREAGGREGATE,
+    DataFilter,
+    FilterCondition,
+    FilterOperator,
     FilterValueError,
     aggregate_pq,
     finalize_group_by,
@@ -24,6 +27,9 @@ __all__ = [
     "aggregate_pq",
     "finalize_group_by",
     "FilterValueError",
+    "FilterOperator",
+    "FilterCondition",
+    "DataFilter",
     "SAFE_PREAGGREGATE",
     "serialize_pa_table_bytes",
     "deserialize_pa_table_bytes",

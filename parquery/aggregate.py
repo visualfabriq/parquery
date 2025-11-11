@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import gc
 import os
-from typing import Any
+from typing import Any, Literal
 
 try:
     import pandas as pd
@@ -14,6 +14,13 @@ except ImportError:
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
+
+# Type aliases for filter operations
+FilterOperator = Literal["in", "not in", "nin", "=", "==", "!=", ">", ">=", "<=", "<"]
+FilterCondition = tuple[str, FilterOperator, Any]  # (column, operator, value(s))
+DataFilter = (
+    list[FilterCondition] | list[list[Any]]
+)  # Support both typed and legacy format
 
 
 class FilterValueError(ValueError):
@@ -34,7 +41,7 @@ def aggregate_pq(
     file_name: str,
     groupby_cols: list[str],
     measure_cols: list[str] | list[list[str]],
-    data_filter: list[list[Any]] | None = None,
+    data_filter: DataFilter | None = None,
     aggregate: bool = True,
     row_group_filter: int | None = None,
     as_df: bool | None = None,
@@ -43,13 +50,79 @@ def aggregate_pq(
     debug: bool = False,
 ) -> pd.DataFrame | pa.Table:
     """
-    A function to aggregate a parquet file using PyArrow
-    NB: we assume that all columns are strings
+    Aggregate a Parquet file using PyArrow with OLAP-style groupby operations.
+
+    This function provides fast aggregations over Parquet files using an OLAP approach
+    with Dimensions (groupby columns) and Measures (aggregated columns). It supports
+    push-down filtering using Parquet metadata for optimal performance.
 
     Args:
-        as_df: Return results as pandas DataFrame (True), PyArrow Table (False),
-               or auto-detect based on pandas availability (None, default).
-               If None: returns DataFrame if pandas is installed, else PyArrow Table.
+        file_name: Path to the Parquet file to aggregate.
+        groupby_cols: List of column names (dimensions) to group by.
+        measure_cols: Columns to aggregate with operations. Can be:
+            - List of column names: ['m1', 'm2'] - performs sum on each
+            - List of [column, operation]: [['m1', 'sum'], ['m2', 'count']]
+            - List of [column, operation, output_name]: [['m1', 'sum', 'm1_total']]
+            Supported operations: sum, mean, std, count, count_na, count_distinct,
+            sorted_count_distinct, min, max, one.
+        data_filter: Optional list of filter conditions to apply before aggregation.
+            Format: [[column, operator, value(s)], ...]
+            Operators: 'in', 'not in', '==', '!=', '>', '>=', '<', '<='
+            Example: [['f0', 'in', [1, 2, 3]], ['f1', '>', 100]]
+        aggregate: If True, performs groupby aggregation. If False, returns filtered
+            rows without aggregation.
+        row_group_filter: Optional row group index to process. If None, processes all
+            row groups. Useful for parallel processing.
+        as_df: Return type control:
+            - None (default): Auto-detect - returns pandas DataFrame if pandas is
+              installed, otherwise PyArrow Table
+            - True: Always returns pandas DataFrame (requires pandas)
+            - False: Always returns PyArrow Table (no pandas needed)
+        standard_missing_id: Default value for missing dimension columns (default: -1).
+            Missing measure columns always get 0.0.
+        handle_missing_file: If True, returns empty result when file doesn't exist.
+            If False, raises OSError for missing files.
+        debug: If True, prints progress information during processing.
+
+    Returns:
+        PyArrow Table or pandas DataFrame containing aggregated results, depending
+        on the as_df parameter.
+
+    Raises:
+        ImportError: If as_df=True but pandas is not installed.
+        OSError: If file doesn't exist and handle_missing_file=False, or if file
+            cannot be read.
+        FilterValueError: If filter values are not numeric for integer columns.
+        NotImplementedError: If an unsupported filter operator is used.
+
+    Examples:
+        >>> # Simple sum aggregation
+        >>> result = aggregate_pq('data.parquet', ['country'], ['sales'])
+
+        >>> # Multiple aggregations with custom names
+        >>> result = aggregate_pq(
+        ...     'data.parquet',
+        ...     ['country', 'region'],
+        ...     [['sales', 'sum', 'total_sales'], ['sales', 'count', 'num_sales']]
+        ... )
+
+        >>> # With filters
+        >>> result = aggregate_pq(
+        ...     'data.parquet',
+        ...     ['product'],
+        ...     ['revenue'],
+        ...     data_filter=[['year', '>=', 2020], ['status', 'in', ['active', 'pending']]]
+        ... )
+
+        >>> # Return PyArrow Table for further processing
+        >>> table = aggregate_pq('data.parquet', ['id'], ['value'], as_df=False)
+
+    Notes:
+        - For "safe" operations (min, max, sum, one), pre-aggregation is performed
+          at the row group level for better memory efficiency.
+        - Push-down filtering uses Parquet metadata statistics to skip row groups
+          that don't contain relevant data.
+        - All dimension columns should contain numeric IDs for optimal performance.
     """
     # Smart default: use pandas if available, otherwise PyArrow
     if as_df is None:
@@ -268,7 +341,7 @@ def add_missing_columns_to_table(
 
 
 def convert_metadata_filter(
-    data_filter: list[list[Any]], pq_file: pq.ParquetFile
+    data_filter: DataFilter, pq_file: pq.ParquetFile
 ) -> list[list[Any]]:
     """Convert filter to metadata filter for push-down filtering."""
     # we check if we have INT type of columns to try to do pushdown statistics filtering
@@ -285,7 +358,7 @@ def convert_metadata_filter(
     return metadata_filter
 
 
-def convert_data_filter(data_filter: list[list[Any]]) -> pc.Expression | None:
+def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
     """Convert filter list to PyArrow compute expression."""
     data_filter_expr = None
     for col, sign, values in data_filter:
@@ -306,7 +379,11 @@ def convert_data_filter(data_filter: list[list[Any]]) -> pc.Expression | None:
         elif sign == "<":
             expr = pc.field(col) < values
         else:
-            raise NotImplementedError(f'Operation "{sign}" is not supported')
+            valid_ops = ["in", "not in", "nin", "=", "==", "!=", ">", ">=", "<=", "<"]
+            raise NotImplementedError(
+                f'Filter operation "{sign}" is not supported for column "{col}". '
+                f"Valid operators: {', '.join(valid_ops)}"
+            )
 
         if data_filter_expr is None:
             data_filter_expr = expr
@@ -364,10 +441,13 @@ def rowgroup_metadata_filter(
             elif sign == "<=":
                 if min_val > values:
                     return True
-        except TypeError:
+        except TypeError as e:
+            col_name = pq_file.metadata.schema.names[col_nr]
             raise FilterValueError(
-                "Dimension filters MUST be numbers, please convert dimension values to dimension ids"
-            )
+                f"Filter value must be numeric for integer column '{col_name}'. "
+                f"Got {type(values).__name__} value(s): {values!r}. "
+                f"Please convert dimension values to numeric IDs before filtering."
+            ) from e
 
     return False
 
@@ -386,7 +466,7 @@ def check_measure_cols(measure_cols: list[str] | list[list[str]]) -> list[list[s
 
 
 def get_cols(
-    data_filter: list[list[Any]], groupby_cols: list[str], measure_cols: list[list[str]]
+    data_filter: DataFilter, groupby_cols: list[str], measure_cols: list[list[str]]
 ) -> tuple[list[str], list[str], list[str]]:
     """Get all columns, input columns, and result columns from query parameters."""
     all_cols = sorted(

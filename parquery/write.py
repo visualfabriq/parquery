@@ -58,17 +58,60 @@ def df_to_parquet(
     debug: bool = False,
 ) -> None:
     """
-    Write a DataFrame or PyArrow Table to Parquet file.
+    Write a DataFrame or PyArrow Table to Parquet file with ZSTD compression.
+
+    Supports pandas DataFrames, Polars DataFrames, and PyArrow Tables. Each type
+    is handled optimally:
+    - pandas: Chunked writing for memory efficiency with large DataFrames
+    - Polars: Zero-copy conversion via Arrow (very efficient)
+    - PyArrow: Direct write (fastest)
+
+    All files are written with ZSTD compression for optimal file sizes.
 
     Args:
-        df: pandas DataFrame, Polars DataFrame, or PyArrow Table
-        filename: output filename
-        workdir: optional working directory
-        chunksize: rows per chunk for pandas DataFrames (ignored for Polars/PyArrow)
-        debug: enable debug output
+        df: Data to write. Can be:
+            - pandas DataFrame (requires pandas installed)
+            - Polars DataFrame (requires polars installed)
+            - PyArrow Table (no additional dependencies)
+        filename: Output filename (without path if workdir is specified).
+        workdir: Optional working directory path. If provided, file is written
+            to workdir/filename. If None, filename is used as-is.
+        chunksize: Number of rows per chunk for pandas DataFrames. Larger values
+            use more memory but may be faster. Ignored for Polars and PyArrow.
+            Default: 100000.
+        debug: If True, prints progress information during writing (pandas only).
 
     Raises:
-        TypeError: If df is not a pandas DataFrame, Polars DataFrame, or PyArrow Table
+        TypeError: If df is not a pandas DataFrame, Polars DataFrame, or PyArrow Table.
+        ImportError: If pandas/polars DataFrame is provided but library not installed.
+
+    Examples:
+        >>> import pyarrow as pa
+        >>> from parquery import df_to_parquet
+        >>>
+        >>> # Write PyArrow Table
+        >>> table = pa.table({'col1': [1, 2, 3], 'col2': ['a', 'b', 'c']})
+        >>> df_to_parquet(table, 'output.parquet')
+        >>>
+        >>> # Write pandas DataFrame with custom chunk size
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({'col1': range(1000000), 'col2': range(1000000)})
+        >>> df_to_parquet(df, 'large.parquet', chunksize=50000)
+        >>>
+        >>> # Write to specific directory
+        >>> df_to_parquet(table, 'data.parquet', workdir='/path/to/output')
+        >>>
+        >>> # Write Polars DataFrame (zero-copy via Arrow)
+        >>> import polars as pl
+        >>> df = pl.DataFrame({'col1': [1, 2, 3], 'col2': ['a', 'b', 'c']})
+        >>> df_to_parquet(df, 'output.parquet')
+
+    Notes:
+        - If the output file already exists, it will be overwritten.
+        - pandas DataFrames are written in chunks to handle large datasets that
+          don't fit in memory.
+        - Polars DataFrames are converted to PyArrow Tables efficiently (zero-copy)
+          before writing.
     """
     full_filename = create_full_filename(filename, workdir)
 

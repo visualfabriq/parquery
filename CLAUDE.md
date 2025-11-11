@@ -151,10 +151,27 @@ Tests use pytest with class-based organization. Test files:
 
 ### Filter Operations
 Supported operators in `data_filter`:
-- `in`, `not in` (list of values)
-- `==`, `!=`, `>`, `>=`, `<`, `<=` (single value)
+- `in`, `not in`, `nin` (list of values)
+- `=`, `==`, `!=`, `>`, `>=`, `<`, `<=` (single value)
 
 Filter structure: `[[column, operator, value(s)], ...]`
+
+**Type Safety**: The library provides type aliases for better IDE support and type checking:
+- `FilterOperator`: Literal type for all valid filter operators
+- `FilterCondition`: Type alias for (column, operator, value) tuples
+- `DataFilter`: Type alias for filter lists
+
+Example with type hints:
+```python
+from parquery import aggregate_pq, FilterCondition
+
+# Type-safe filter definition
+filters: list[FilterCondition] = [
+    ("year", ">=", 2020),
+    ("status", "in", ["active", "pending"])
+]
+result = aggregate_pq("data.parquet", ["id"], ["value"], data_filter=filters)
+```
 
 ### Aggregation Operations
 Supported in `aggregation_list`:
