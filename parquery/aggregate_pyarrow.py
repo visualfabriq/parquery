@@ -3,13 +3,6 @@ from __future__ import annotations
 import gc
 import os
 
-try:
-    import pandas as pd  # noqa: F401
-
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
-
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds

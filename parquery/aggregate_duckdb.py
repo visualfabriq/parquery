@@ -4,13 +4,6 @@ import os
 from typing import Any, Literal
 
 try:
-    import pandas as pd  # noqa: F401
-
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
-
-try:
     import duckdb
 
     HAS_DUCKDB = True
