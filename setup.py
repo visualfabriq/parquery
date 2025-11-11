@@ -41,12 +41,24 @@ setup_requires = []
 tests_requires = [
     "pytest",
     "coverage",
+    "duckdb>=1.0.0",  # Test both PyArrow and DuckDB engines
 ]
-extras_requires = [
+
+# Optional dependencies for DataFrame support
+dataframe_requires = [
     "numpy",
     "pandas>=1.5.3",
     "polars>=0.19.0",
 ]
+
+# Performance optimization with DuckDB
+performance_requires = [
+    "duckdb>=1.0.0",
+]
+
+# All optional dependencies
+all_requires = dataframe_requires + performance_requires
+
 extensions = []
 
 package_data = {}
@@ -86,7 +98,13 @@ setup(
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=tests_requires,
-    extras_require=dict(optional=extras_requires, test=tests_requires),
+    extras_require={
+        "performance": performance_requires,
+        "dataframes": dataframe_requires,
+        "optional": all_requires,  # backwards compatibility
+        "all": all_requires,
+        "test": tests_requires,
+    },
     packages=find_packages(),
     package_data=package_data,
     include_package_data=True,

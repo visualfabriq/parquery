@@ -8,9 +8,23 @@ from parquery.aggregate import (
     FilterCondition,
     FilterOperator,
     FilterValueError,
+    HAS_DUCKDB,
     aggregate_pq,
-    finalize_group_by,
 )
+
+try:
+    from parquery.aggregate_pyarrow import (
+        aggregate_pq_pyarrow,
+        finalize_group_by,
+    )
+except ImportError:
+    pass
+
+try:
+    from parquery.aggregate_duckdb import aggregate_pq_duckdb
+except ImportError:
+    pass
+
 from parquery.tool import df_to_natural_name, df_to_original_name
 from parquery.transport import (
     deserialize_pa_table_base64,
@@ -25,6 +39,7 @@ __version__: str = pre_release_version if pre_release_version else "2.0.0"
 
 __all__ = [
     "aggregate_pq",
+    "aggregate_pq_pyarrow",
     "finalize_group_by",
     "FilterValueError",
     "FilterOperator",
@@ -38,4 +53,13 @@ __all__ = [
     "df_to_parquet",
     "df_to_natural_name",
     "df_to_original_name",
+    "HAS_DUCKDB",
 ]
+
+# Add DuckDB function if available
+try:
+    from parquery.aggregate_duckdb import aggregate_pq_duckdb  # noqa: F401
+
+    __all__.append("aggregate_pq_duckdb")
+except ImportError:
+    pass
