@@ -21,7 +21,7 @@ jobs:
         default: "medium"
     resource_class: <<parameters.resource-class>>
     docker:
-      - image: cimg/python:<<parameters.runtime>>
+      - image: cimg/python:<<parameters.runtime>>  # Ubuntu 22.04 with glibc 2.35
 
     working_directory: ~/parquery
     steps:
