@@ -36,25 +36,9 @@ jobs:
             - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies
 
       - run:
-          name: Upgrade pip and check platform
+          name: Upgrade pip
           command: |
             ~/venv/bin/pip install --upgrade pip wheel
-            python3 --version
-            ldd --version || true
-            uname -m
-
-      - when:
-          condition:
-            equal: [ "arm.medium", << parameters.resource-class >> ]
-          steps:
-            - run:
-                name: Check ARM64 platform compatibility
-                command: |
-                  echo "Platform tags:"
-                  ~/venv/bin/python3 -c "import pip._internal.utils.compatibility_tags as ct; print('\n'.join(str(t) for t in ct.get_supported()))" | head -20
-                  echo "---"
-                  echo "Checking if PyArrow wheel is available:"
-                  ~/venv/bin/pip index versions pyarrow | grep "Available versions"
 
       - codeartifact/init:
           tool: pip
