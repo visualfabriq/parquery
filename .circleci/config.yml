@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  codeartifact: visualfabriq/codeartifact@1.3.0
+  codeartifact: visualfabriq/codeartifact@1.3.21
   coverage-reporter: codacy/coverage-reporter@14.1.0
 
 jobs:
