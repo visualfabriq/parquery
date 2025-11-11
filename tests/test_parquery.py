@@ -11,9 +11,14 @@ from importlib.util import find_spec
 import pyarrow as pa
 import pytest
 
-from parquery import aggregate_pq, df_to_parquet
+from parquery import aggregate_pq, df_to_parquet, HAS_DUCKDB
 
 HAS_PANDAS = find_spec("pandas") is not None
+
+# Test both engines
+ENGINES_TO_TEST = ["pyarrow"]
+if HAS_DUCKDB:
+    ENGINES_TO_TEST.append("duckdb")
 
 
 # Helper functions to replace numpy/pandas functionality
