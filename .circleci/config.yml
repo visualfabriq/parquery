@@ -32,8 +32,26 @@ jobs:
 
       - restore_cache:
           keys:
-            - << parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
-            - << parameters.runtime >>-v1-dependecies
+            - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
+            - << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies
+
+      - when:
+          condition:
+            equal: [ "arm.medium", << parameters.resource-class >> ]
+          steps:
+            - run:
+                name: Install ARM64 build dependencies
+                command: |
+                  sudo apt-get update
+                  sudo apt-get install -y \
+                    cmake \
+                    build-essential \
+                    libssl-dev \
+                    libbz2-dev \
+                    libzstd-dev \
+                    liblz4-dev \
+                    libsnappy-dev \
+                    zlib1g-dev
 
       - codeartifact/init:
           tool: pip
@@ -46,7 +64,7 @@ jobs:
 
       # Save the cached dependencies
       - save_cache:
-          key: << parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
+          key: << parameters.resource-class >>-<< parameters.runtime >>-v1-dependecies-{{ checksum "setup.py" }}
           paths:
             - ~/venv
 
