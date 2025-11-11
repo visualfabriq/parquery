@@ -31,6 +31,7 @@ pa_table = aggregate_pq(
 ```
 
 **Return Type (`as_df` parameter):**
+
 - `None` (default): Auto-detects - returns pandas DataFrame if pandas is installed, otherwise PyArrow Table
 - `True`: Always returns pandas DataFrame (requires pandas to be installed)
 - `False`: Always returns PyArrow Table (no pandas needed)
