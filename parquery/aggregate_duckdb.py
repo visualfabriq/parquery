@@ -137,6 +137,31 @@ def aggregate_pq_duckdb(
     if not os.path.exists(file_name) and handle_missing_file:
         return _create_empty_result(result_cols, as_df)
 
+    # Get Parquet schema to identify missing columns
+    try:
+        schema = pa.parquet.read_schema(file_name)
+        existing_cols = set(schema.names)
+    except Exception:
+        # If we can't read schema, assume all columns exist (will fail later if they don't)
+        existing_cols = set(all_cols)
+
+    # Identify missing columns
+    expected_measure_cols = [x[0] for x in measure_cols]
+    missing_cols = {}
+    for col in all_cols:
+        if col not in existing_cols:
+            if col in expected_measure_cols:
+                # Missing measure columns get 0.0
+                missing_cols[col] = 0.0
+            else:
+                # Missing dimension columns get standard_missing_id
+                missing_cols[col] = standard_missing_id
+
+    # Check if filter columns exist - if not, return empty result
+    for col, _, _ in data_filter:
+        if col not in existing_cols:
+            return _create_empty_result(result_cols, as_df)
+
     # Build SQL query
     sql = _build_sql_query(
         file_name,
@@ -146,6 +171,8 @@ def aggregate_pq_duckdb(
         aggregate,
         standard_missing_id,
         all_cols,
+        existing_cols,
+        missing_cols,
     )
 
     if debug:
@@ -216,8 +243,10 @@ def _build_sql_query(
     aggregate: bool,
     standard_missing_id: int,
     all_cols: list[str],
+    existing_cols: set[str],
+    missing_cols: dict[str, float | int],
 ) -> str:
-    """Build DuckDB SQL query for aggregation."""
+    """Build DuckDB SQL query for aggregation with support for missing columns."""
     # Map operation names to DuckDB equivalents
     op_map = {
         "sum": "SUM",
@@ -235,23 +264,40 @@ def _build_sql_query(
     }
 
     # Build SELECT clause
-    if aggregate and groupby_cols:
-        # Group by aggregation
-        select_parts = [f'"{col}"' for col in groupby_cols]
-        for col, op, output_name in measure_cols:
-            op_upper = op.lower()
-            if op_upper in ["count_distinct", "sorted_count_distinct"]:
-                agg_expr = f'COUNT(DISTINCT "{col}")'
+    if aggregate:
+        # Aggregation with or without groupby
+        select_parts = []
+        for col in groupby_cols:
+            if col in missing_cols:
+                # Missing groupby column - use literal value
+                select_parts.append(f"{missing_cols[col]} AS \"{col}\"")
             else:
-                sql_op = op_map.get(op_upper, op.upper())
-                agg_expr = f'{sql_op}("{col}")'
+                select_parts.append(f'"{col}"')
 
-            # Handle NULL values with COALESCE and use output_name as alias
-            select_parts.append(f"COALESCE({agg_expr}, 0.0) AS \"{output_name}\"")
+        for col, op, output_name in measure_cols:
+            if col in missing_cols:
+                # Missing measure column - always 0.0
+                select_parts.append(f"0.0 AS \"{output_name}\"")
+            else:
+                op_upper = op.lower()
+                if op_upper in ["count_distinct", "sorted_count_distinct"]:
+                    agg_expr = f'COUNT(DISTINCT "{col}")'
+                else:
+                    sql_op = op_map.get(op_upper, op.upper())
+                    agg_expr = f'{sql_op}("{col}")'
+
+                # Handle NULL values with COALESCE and use output_name as alias
+                select_parts.append(f"COALESCE({agg_expr}, 0.0) AS \"{output_name}\"")
         select_clause = ", ".join(select_parts)
     else:
-        # No aggregation, just select columns
-        select_clause = ", ".join(f'"{col}"' for col in all_cols)
+        # No aggregation, just select columns (with literals for missing ones)
+        select_parts = []
+        for col in all_cols:
+            if col in missing_cols:
+                select_parts.append(f"{missing_cols[col]} AS \"{col}\"")
+            else:
+                select_parts.append(f'"{col}"')
+        select_clause = ", ".join(select_parts)
 
     # Build FROM clause
     from_clause = f"read_parquet('{file_name}')"
@@ -266,10 +312,12 @@ def _build_sql_query(
     if where_conditions:
         where_clause = "WHERE " + " AND ".join(where_conditions)
 
-    # Build GROUP BY clause
+    # Build GROUP BY clause (only for columns that exist in the file)
     group_by_clause = ""
     if aggregate and groupby_cols:
-        group_by_clause = "GROUP BY " + ", ".join(f'"{col}"' for col in groupby_cols)
+        existing_groupby_cols = [col for col in groupby_cols if col not in missing_cols]
+        if existing_groupby_cols:
+            group_by_clause = "GROUP BY " + ", ".join(f'"{col}"' for col in existing_groupby_cols)
 
     # Combine all parts
     query_parts = [f"SELECT {select_clause}", f"FROM {from_clause}"]

@@ -58,6 +58,16 @@ def round_float_columns(table, decimal=6):
     return pa.table(arrays, names=table.column_names)
 
 
+def sort_table(table, sort_keys):
+    """Sort a PyArrow table by specified columns."""
+    if not sort_keys or table.num_rows == 0:
+        return table
+    # Convert to list of dicts, sort, convert back
+    rows = table.to_pylist()
+    sorted_rows = sorted(rows, key=lambda x: [x[k] for k in sort_keys])
+    return pa.Table.from_pylist(sorted_rows, schema=table.schema)
+
+
 @pytest.mark.parametrize('engine', ENGINES_TO_TEST)
 class TestParquery(object):
 
@@ -147,6 +157,8 @@ class TestParquery(object):
         df_to_parquet(table, self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols,
             agg_list, as_df=False, engine=engine)
+        # Sort result by groupby columns for consistent comparison
+        result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
         print('--> Itertools')
         data_list = list(zip(*[table[col].to_pylist() for col in table.
@@ -239,6 +251,9 @@ class TestParquery(object):
             enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
         assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def test_groupby_04(self, engine):
@@ -339,7 +354,10 @@ class TestParquery(object):
                 enumerate(result_parquery.column_names)})
             result_ref = round_float_columns(result_ref, 6)
             result_parquery = round_float_columns(result_parquery, 6)
-            assert_tables_equal(result_ref, result_parquery, decimal=6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
+        assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def test_groupby_06(self, engine):
         """
@@ -384,6 +402,9 @@ class TestParquery(object):
             enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
         assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def test_groupby_07(self, engine):
@@ -430,6 +451,9 @@ class TestParquery(object):
             enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
         assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def _get_unique(self, values):
@@ -533,6 +557,9 @@ class TestParquery(object):
             enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
         assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def test_groupby_09(self, engine):
@@ -612,6 +639,9 @@ class TestParquery(object):
             enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
+        # Sort for consistent comparison across engines
+        result_ref = sort_table(result_ref, groupby_cols)
+        result_parquery = sort_table(result_parquery, groupby_cols)
         assert_tables_equal(result_ref, result_parquery, decimal=6)
 
     def test_groupby_10(self, engine):
@@ -638,6 +668,8 @@ class TestParquery(object):
         df_to_parquet(table, self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols,
             agg_list, as_df=False, engine=engine)
+        # Sort for consistent comparison across engines
+        result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
         print('--> Itertools')
         data_list = list(zip(*[table[col].to_pylist() for col in table.
@@ -688,6 +720,8 @@ class TestParquery(object):
         df_to_parquet(table, self.filename)
         result_parquery = aggregate_pq(self.filename, groupby_cols,
             agg_list, as_df=False, engine=engine)
+        # Sort for consistent comparison across engines
+        result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
         print('--> Itertools')
         data_list = list(zip(*[table[col].to_pylist() for col in table.
