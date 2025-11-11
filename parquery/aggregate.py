@@ -219,6 +219,7 @@ def aggregate_pq(
                 )
             except OSError:
                 gc.collect()
+                pa.default_memory_pool().release_unused()  # Return memory to OS
                 sub = fragment_subset.to_table(
                     columns=existing_cols, filter=data_filter_expr
                 )
