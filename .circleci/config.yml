@@ -104,6 +104,14 @@ jobs:
         default: false
     steps:
       - checkout
+
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+
       - codeartifact/init:
           tool: pip
       - when:
@@ -114,7 +122,7 @@ jobs:
       - run:
           name: Build
           command: |
-            pip install build
+            uv pip install build
             python -m build
       - codeartifact/push:
           tool: twine
