@@ -8,9 +8,12 @@ from parquery.aggregate import (
     aggregate_pq,
     finalize_group_by,
 )
+from parquery.tool import df_to_natural_name, df_to_original_name
 from parquery.transport import (
-    deserialize_pa_table,
-    serialize_pa_table,
+    deserialize_pa_table_base64,
+    deserialize_pa_table_bytes,
+    serialize_pa_table_base64,
+    serialize_pa_table_bytes,
 )
 from parquery.write import df_to_parquet
 
@@ -22,7 +25,11 @@ __all__ = [
     "finalize_group_by",
     "FilterValueError",
     "SAFE_PREAGGREGATE",
-    "serialize_pa_table",
-    "deserialize_pa_table",
+    "serialize_pa_table_bytes",
+    "deserialize_pa_table_bytes",
+    "serialize_pa_table_base64",
+    "deserialize_pa_table_base64",
     "df_to_parquet",
+    "df_to_natural_name",
+    "df_to_original_name",
 ]

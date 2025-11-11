@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 
 if TYPE_CHECKING:
     import pandas as pd
+    import polars as pl
 
 try:
     import pandas as pd
@@ -17,9 +18,39 @@ try:
 except ImportError:
     HAS_PANDAS = False
 
+try:
+    import polars as pl
+
+    HAS_POLARS = True
+except ImportError:
+    HAS_POLARS = False
+
+
+def create_full_filename(
+    filename: str, workdir: str | pathlib.Path | None
+) -> pathlib.Path | str:
+    """
+    Create full filename with optional working directory.
+
+    Args:
+        filename: base filename
+        workdir: optional working directory
+
+    Returns:
+        Full filename as pathlib.Path or str
+    """
+    if workdir:
+        full_filename = pathlib.Path(workdir) / filename
+    else:
+        full_filename = filename
+    # check if we are overwriting an existing file
+    if os.path.exists(full_filename):
+        os.remove(full_filename)
+    return full_filename
+
 
 def df_to_parquet(
-    df: pd.DataFrame | pa.Table,
+    df: pd.DataFrame | pl.DataFrame | pa.Table,
     filename: str,
     workdir: str | pathlib.Path | None = None,
     chunksize: int = 100000,
@@ -29,42 +60,39 @@ def df_to_parquet(
     Write a DataFrame or PyArrow Table to Parquet file.
 
     Args:
-        df: pandas DataFrame or PyArrow Table
+        df: pandas DataFrame, Polars DataFrame, or PyArrow Table
         filename: output filename
         workdir: optional working directory
-        chunksize: rows per chunk for DataFrames
+        chunksize: rows per chunk for pandas DataFrames (ignored for Polars/PyArrow)
         debug: enable debug output
 
     Raises:
-        TypeError: If df is not a pandas DataFrame or PyArrow Table
+        TypeError: If df is not a pandas DataFrame, Polars DataFrame, or PyArrow Table
     """
+    full_filename = create_full_filename(filename, workdir)
+
     # Convert pandas DataFrame to PyArrow Table if needed
     if HAS_PANDAS and isinstance(df, pd.DataFrame):
-        # For DataFrames, use chunked writing
-        return _write_chunked_df(df, filename, workdir, chunksize, debug)
+        # For pandas DataFrames, use chunked writing
+        _write_chunked_df(df, full_filename, chunksize, debug=debug)
+    elif HAS_POLARS and isinstance(df, pl.DataFrame):
+        # For Polars DataFrames, convert to PyArrow and write directly
+        # Polars is built on Arrow, so this is very efficient
+        table = df.to_arrow()
+        pq.write_table(table, full_filename, compression="ZSTD")
     elif isinstance(df, pa.Table):
         # Write PyArrow table directly
-        if workdir:
-            full_filename = pathlib.Path(workdir) / filename
-        else:
-            full_filename = filename
-
-        if os.path.exists(full_filename):
-            os.remove(full_filename)
-
         pq.write_table(df, full_filename, compression="ZSTD")
-        return
     else:
         raise TypeError(
-            f"df must be a pandas DataFrame or PyArrow Table, got {type(df)}. "
-            "Install pandas with: pip install pandas or uv pip install 'parquery[optional]'"
+            f"df must be a pandas DataFrame, Polars DataFrame, or PyArrow Table, got {type(df)}. "
+            "Install pandas or polars with: pip install pandas/polars or uv pip install 'parquery[optional]'"
         )
 
 
 def _write_chunked_df(
     df: pd.DataFrame,
-    filename: str,
-    workdir: str | pathlib.Path | None = None,
+    full_filename: str,
     chunksize: int = 100000,
     debug: bool = False,
 ) -> None:
@@ -73,8 +101,7 @@ def _write_chunked_df(
 
     Args:
         df: Pandas DataFrame to write
-        filename: output filename
-        workdir: optional working directory
+        full_filename: output filename
         chunksize: rows per chunk
         debug: enable debug output
 
@@ -87,15 +114,7 @@ def _write_chunked_df(
             "Install with: pip install pandas or uv pip install 'parquery[optional]'"
         )
 
-    if workdir:
-        full_filename = pathlib.Path(workdir) / filename
-    else:
-        full_filename = filename
     writer = None
-
-    # check if we are overwriting an existing file
-    if os.path.exists(full_filename):
-        os.remove(full_filename)
 
     i = 0
 
