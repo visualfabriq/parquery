@@ -36,11 +36,10 @@ def aggregate_pq_pyarrow(
     measure_cols: list[str] | list[list[str]],
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
-    as_df: bool | None = None,
     standard_missing_id: int = -1,
     handle_missing_file: bool = True,
     debug: bool = False,
-) -> pd.DataFrame | pa.Table:
+) -> pa.Table:
     """
     Aggregate a Parquet file using PyArrow with OLAP-style groupby operations.
 
@@ -63,11 +62,6 @@ def aggregate_pq_pyarrow(
             Example: [['f0', 'in', [1, 2, 3]], ['f1', '>', 100]]
         aggregate: If True, performs groupby aggregation. If False, returns filtered
             rows without aggregation.
-        as_df: Return type control:
-            - None (default): Auto-detect - returns pandas DataFrame if pandas is
-              installed, otherwise PyArrow Table
-            - True: Always returns pandas DataFrame (requires pandas)
-            - False: Always returns PyArrow Table (no pandas needed)
         standard_missing_id: Default value for missing dimension columns (default: -1).
             Missing measure columns always get 0.0.
         handle_missing_file: If True, returns empty result when file doesn't exist.
@@ -75,11 +69,9 @@ def aggregate_pq_pyarrow(
         debug: If True, prints progress information during processing.
 
     Returns:
-        PyArrow Table or pandas DataFrame containing aggregated results, depending
-        on the as_df parameter.
+        PyArrow Table containing aggregated results.
 
     Raises:
-        ImportError: If as_df=True but pandas is not installed.
         OSError: If file doesn't exist and handle_missing_file=False, or if file
             cannot be read.
         FilterValueError: If filter values are not numeric for integer columns.
@@ -104,8 +96,8 @@ def aggregate_pq_pyarrow(
         ...     data_filter=[['year', '>=', 2020], ['status', 'in', ['active', 'pending']]]
         ... )
 
-        >>> # Return PyArrow Table for further processing
-        >>> table = aggregate_pq_pyarrow('data.parquet', ['id'], ['value'], as_df=False)
+        >>> # Returns PyArrow Table for further processing
+        >>> table = aggregate_pq_pyarrow('data.parquet', ['id'], ['value'])
 
     Notes:
         - For "safe" operations (min, max, sum, one), pre-aggregation is performed
@@ -114,16 +106,6 @@ def aggregate_pq_pyarrow(
           that don't contain relevant data.
         - All dimension columns should contain numeric IDs for optimal performance.
     """
-    # Smart default: use pandas if available, otherwise PyArrow
-    if as_df is None:
-        as_df = HAS_PANDAS
-
-    if as_df and not HAS_PANDAS:
-        raise ImportError(
-            "pandas is required for as_df=True. "
-            "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-        )
-
     data_filter = data_filter or []
 
     # check measure_cols
@@ -164,7 +146,7 @@ def aggregate_pq_pyarrow(
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
-        return create_empty_result(result_cols, as_df)
+        return create_empty_result(result_cols)
 
     # Create dataset (replaces ParquetFile)
     try:
@@ -177,7 +159,7 @@ def aggregate_pq_pyarrow(
     schema_names = dataset.schema.names
     for col, _, _ in data_filter:
         if col not in schema_names:
-            return create_empty_result(result_cols, as_df)
+            return create_empty_result(result_cols)
 
     # Convert data filter to PyArrow expression (automatic push-down)
     data_filter_expr = convert_data_filter(data_filter) if data_filter else None
@@ -252,7 +234,7 @@ def aggregate_pq_pyarrow(
         print("Combining results")
 
     if not result:
-        return create_empty_result(result_cols, as_df)
+        return create_empty_result(result_cols)
 
     table = finalize_group_by(
         result, groupby_cols, agg, aggregate, use_threads=not disable_threads
@@ -267,16 +249,7 @@ def aggregate_pq_pyarrow(
 
     table = table.select(result_cols)
 
-    if not as_df:
-        return table
-
-    if HAS_PANDAS:
-        return table.to_pandas()
-    else:
-        raise ImportError(
-            "pandas is required for as_df=True. "
-            "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-        )
+    return table
 
 
 def finalize_group_by(
@@ -318,22 +291,12 @@ def groupby_py3(
     return grouped_table.rename_columns(col_names)
 
 
-def create_empty_result(result_cols: list[str], as_df: bool) -> pd.DataFrame | pa.Table:
-    """Create an empty result with the specified columns."""
+def create_empty_result(result_cols: list[str]) -> pa.Table:
+    """Create an empty PyArrow Table with the specified columns."""
     # Create empty PyArrow table with schema
     schema = pa.schema([(col, pa.null()) for col in result_cols])
     empty_table = pa.Table.from_pydict({col: [] for col in result_cols}, schema=schema)
-
-    if as_df:
-        if HAS_PANDAS:
-            return empty_table.to_pandas()
-        else:
-            raise ImportError(
-                "pandas is required for as_df=True. "
-                "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-            )
-    else:
-        return empty_table
+    return empty_table
 
 
 def add_missing_columns_to_table(

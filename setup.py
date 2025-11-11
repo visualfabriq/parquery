@@ -41,6 +41,7 @@ setup_requires = []
 tests_requires = [
     "pytest",
     "coverage",
+    "duckdb>=1.0.0",  # Test both PyArrow and DuckDB engines
 ]
 
 # Optional dependencies for DataFrame support

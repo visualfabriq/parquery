@@ -107,11 +107,21 @@ def aggregate_pq(
     if engine is None:
         engine = "auto"
 
+    # Smart default: use pandas if available, otherwise PyArrow
+    if as_df is None:
+        as_df = HAS_PANDAS
+
+    if as_df and not HAS_PANDAS:
+        raise ImportError(
+            "pandas is required for as_df=True. "
+            "Install with: pip install pandas or uv pip install 'parquery[dataframes]'"
+        )
+
     # Auto-select engine
     if engine == "auto":
         engine = "duckdb" if HAS_DUCKDB else "pyarrow"
 
-    # Route to appropriate engine
+    # Route to appropriate engine (engines always return PyArrow Tables)
     if engine == "duckdb":
         if not HAS_DUCKDB:
             raise ImportError(
@@ -121,13 +131,12 @@ def aggregate_pq(
         # Import here to avoid circular dependency
         from parquery.aggregate_duckdb import aggregate_pq_duckdb
 
-        return aggregate_pq_duckdb(
+        result = aggregate_pq_duckdb(
             file_name=file_name,
             groupby_cols=groupby_cols,
             measure_cols=measure_cols,
             data_filter=data_filter,
             aggregate=aggregate,
-            as_df=as_df,
             standard_missing_id=standard_missing_id,
             handle_missing_file=handle_missing_file,
             debug=debug,
@@ -135,16 +144,21 @@ def aggregate_pq(
     elif engine == "pyarrow":
         from parquery.aggregate_pyarrow import aggregate_pq_pyarrow
 
-        return aggregate_pq_pyarrow(
+        result = aggregate_pq_pyarrow(
             file_name=file_name,
             groupby_cols=groupby_cols,
             measure_cols=measure_cols,
             data_filter=data_filter,
             aggregate=aggregate,
-            as_df=as_df,
             standard_missing_id=standard_missing_id,
             handle_missing_file=handle_missing_file,
             debug=debug,
         )
     else:
         raise ValueError(f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'")
+
+    # Convert to pandas if requested (engines always return PyArrow Tables)
+    if as_df:
+        return result.to_pandas()
+    else:
+        return result

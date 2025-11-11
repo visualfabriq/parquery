@@ -37,11 +37,10 @@ def aggregate_pq_duckdb(
     measure_cols: list[str] | list[list[str]],
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
-    as_df: bool | None = None,
     standard_missing_id: int = -1,
     handle_missing_file: bool = True,
     debug: bool = False,
-) -> pd.DataFrame | pa.Table:
+) -> pa.Table:
     """
     Aggregate a Parquet file using DuckDB with streaming execution.
 
@@ -63,11 +62,6 @@ def aggregate_pq_duckdb(
             Example: [['f0', 'in', [1, 2, 3]], ['f1', '>', 100]]
         aggregate: If True, performs groupby aggregation. If False, returns filtered
             rows without aggregation.
-        as_df: Return type control:
-            - None (default): Auto-detect - returns pandas DataFrame if pandas is
-              installed, otherwise PyArrow Table
-            - True: Always returns pandas DataFrame (requires pandas)
-            - False: Always returns PyArrow Table (no pandas needed)
         standard_missing_id: Default value for missing dimension columns (default: -1).
             Missing measure columns always get 0.0.
         handle_missing_file: If True, returns empty result when file doesn't exist.
@@ -75,11 +69,10 @@ def aggregate_pq_duckdb(
         debug: If True, prints SQL queries during processing.
 
     Returns:
-        PyArrow Table or pandas DataFrame containing aggregated results, depending
-        on the as_df parameter.
+        PyArrow Table containing aggregated results.
 
     Raises:
-        ImportError: If DuckDB is not installed, or if as_df=True but pandas is not installed.
+        ImportError: If DuckDB is not installed.
         OSError: If file doesn't exist and handle_missing_file=False, or if file
             cannot be read.
         FilterValueError: If filter values are invalid.
@@ -116,15 +109,6 @@ def aggregate_pq_duckdb(
         )
 
     # Smart default: use pandas if available, otherwise PyArrow
-    if as_df is None:
-        as_df = HAS_PANDAS
-
-    if as_df and not HAS_PANDAS:
-        raise ImportError(
-            "pandas is required for as_df=True. "
-            "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-        )
-
     data_filter = data_filter or []
 
     # Normalize measure_cols to [column, operation, output_name] format
@@ -135,7 +119,7 @@ def aggregate_pq_duckdb(
 
     # if the file does not exist, give back an empty result
     if not os.path.exists(file_name) and handle_missing_file:
-        return _create_empty_result(result_cols, as_df)
+        return _create_empty_result(result_cols)
 
     # Get Parquet schema to identify missing columns
     try:
@@ -160,7 +144,7 @@ def aggregate_pq_duckdb(
     # Check if filter columns exist - if not, return empty result
     for col, _, _ in data_filter:
         if col not in existing_cols:
-            return _create_empty_result(result_cols, as_df)
+            return _create_empty_result(result_cols)
 
     # Build SQL query
     sql = _build_sql_query(
@@ -187,22 +171,13 @@ def aggregate_pq_duckdb(
         conn.close()
     except Exception as e:
         if handle_missing_file and "No files found" in str(e):
-            return _create_empty_result(result_cols, as_df)
+            return _create_empty_result(result_cols)
         raise
 
     # Ensure correct column order
     result_arrow = result_arrow.select(result_cols)
 
-    if not as_df:
-        return result_arrow
-
-    if HAS_PANDAS:
-        return result_arrow.to_pandas()
-    else:
-        raise ImportError(
-            "pandas is required for as_df=True. "
-            "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-        )
+    return result_arrow
 
 
 def _check_measure_cols(measure_cols: list[str] | list[list[str]]) -> list[list[str]]:
@@ -363,19 +338,9 @@ def _build_filter_condition(col: str, operator: str, values: Any) -> str:
         )
 
 
-def _create_empty_result(result_cols: list[str], as_df: bool) -> pd.DataFrame | pa.Table:
-    """Create an empty result with the specified columns."""
+def _create_empty_result(result_cols: list[str]) -> pa.Table:
+    """Create an empty PyArrow Table with the specified columns."""
     # Create empty PyArrow table with schema
     schema = pa.schema([(col, pa.null()) for col in result_cols])
     empty_table = pa.Table.from_pydict({col: [] for col in result_cols}, schema=schema)
-
-    if as_df:
-        if HAS_PANDAS:
-            return empty_table.to_pandas()
-        else:
-            raise ImportError(
-                "pandas is required for as_df=True. "
-                "Install with: pip install pandas or uv pip install 'parquery[optional]'"
-            )
-    else:
-        return empty_table
+    return empty_table
