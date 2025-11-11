@@ -250,16 +250,18 @@ class TestEngineBackwardCompatibility:
         assert result.num_rows == 3
 
     def test_pyarrow_direct_call(self, test_parquet_file):
-        """Test direct call to aggregate_pq_pyarrow."""
+        """Test direct call to aggregate_pq_pyarrow (always returns PyArrow Table)."""
         result = aggregate_pq_pyarrow(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], as_df=False
+            test_parquet_file, ["group_id"], [["m1", "sum"]]
         )
+        assert isinstance(result, pa.Table)
         assert result.num_rows == 3
 
     @pytest.mark.skipif(not HAS_DUCKDB_MODULE, reason="DuckDB not installed")
     def test_duckdb_direct_call(self, test_parquet_file):
-        """Test direct call to aggregate_pq_duckdb."""
+        """Test direct call to aggregate_pq_duckdb (always returns PyArrow Table)."""
         result = aggregate_pq_duckdb(
-            test_parquet_file, ["group_id"], [["m1", "sum"]], as_df=False
+            test_parquet_file, ["group_id"], [["m1", "sum"]]
         )
+        assert isinstance(result, pa.Table)
         assert result.num_rows == 3
