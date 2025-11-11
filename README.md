@@ -20,8 +20,8 @@ A groupby with aggregation is easy to perform:
         groupby_col_list,  # a list of the column names (dimensions) over which the aggregation results are presented
         aggregation_list,  # see the aggregation list explanation below
         data_filter=data_filter, # see the aggregation list explanation below
-        aggregate=True,  # a boolean that determines  
-        as_df=False  # results can be as a Pandas DataFrame (True) or a pyarrow object (False)
+        aggregate=True,  # a boolean that determines
+        as_df=False  # results can be as a Pandas DataFrame (True), pyarrow Table (False), or auto-detect (None, default)
     )
 
 ### Aggregation List Supported Operations

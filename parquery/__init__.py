@@ -1,19 +1,28 @@
-from parquery.aggregate import aggregate_pq, FilterValueError, finalize_group_by, SAFE_PREAGGREGATE
-from parquery.transport import serialize_df, deserialize_df, serialize_pa_table, deserialize_pa_table
-from parquery.write import df_to_parquet
+from __future__ import annotations
+
 import os
 
-pre_release_version = os.getenv('PRE_RELEASE_VERSION', '')
-__version__ = pre_release_version if pre_release_version else '1.2.0'
+from parquery.aggregate import (
+    SAFE_PREAGGREGATE,
+    FilterValueError,
+    aggregate_pq,
+    finalize_group_by,
+)
+from parquery.transport import (
+    deserialize_pa_table,
+    serialize_pa_table,
+)
+from parquery.write import df_to_parquet
+
+pre_release_version = os.getenv("PRE_RELEASE_VERSION", "")
+__version__: str = pre_release_version if pre_release_version else "1.2.0"
 
 __all__ = [
-    'aggregate_pq',
-    'finalize_group_by',
-    'FilterValueError',
-    'SAFE_PREAGGREGATE',
-    'serialize_df',
-    'deserialize_df',
-    'serialize_pa_table',
-    'deserialize_pa_table',
-    'df_to_parquet'
+    "aggregate_pq",
+    "finalize_group_by",
+    "FilterValueError",
+    "SAFE_PREAGGREGATE",
+    "serialize_pa_table",
+    "deserialize_pa_table",
+    "df_to_parquet",
 ]
