@@ -42,6 +42,7 @@ tests_requires = [
     "pytest",
     "coverage",
     "duckdb>=1.0.0",  # Test both PyArrow and DuckDB engines
+    "mypy",  # Type checking
 ]
 
 # Optional dependencies for DataFrame support
@@ -61,7 +62,7 @@ all_requires = dataframe_requires + performance_requires
 
 extensions = []
 
-package_data = {}
+package_data = {"parquery": ["py.typed"]}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",

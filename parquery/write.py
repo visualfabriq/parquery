@@ -40,6 +40,7 @@ def create_full_filename(
     Returns:
         Full filename as pathlib.Path or str
     """
+    full_filename: pathlib.Path | str
     if workdir:
         full_filename = pathlib.Path(workdir) / filename
     else:
@@ -136,7 +137,7 @@ def df_to_parquet(
 
 def _write_chunked_df(
     df: pd.DataFrame,
-    full_filename: str,
+    full_filename: str | pathlib.Path,
     chunksize: int = 100000,
     debug: bool = False,
 ) -> None:

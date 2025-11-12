@@ -57,6 +57,8 @@ def test_arrow_table_roundtrip_verification():
     assert isinstance(serialized_bytes, bytes), f"Expected bytes, got {type(serialized_bytes)}"
 
     deserialized_from_bytes = deserialize_pa_table_bytes(serialized_bytes)
+    # Verify the deserialized object is a pa.Table
+    assert isinstance(deserialized_from_bytes, pa.Table), f"Expected pa.Table, got {type(deserialized_from_bytes)}"
 
     # Verify bytes roundtrip
     assert deserialized_from_bytes.column_names == original_table.column_names
@@ -70,6 +72,8 @@ def test_arrow_table_roundtrip_verification():
     assert isinstance(serialized_base64, str), f"Expected str, got {type(serialized_base64)}"
 
     deserialized_from_base64 = deserialize_pa_table_base64(serialized_base64)
+    # Verify the deserialized object is a pa.Table
+    assert isinstance(deserialized_from_base64, pa.Table), f"Expected pa.Table, got {type(deserialized_from_base64)}"
 
     # Verify base64 roundtrip
     assert deserialized_from_base64.column_names == original_table.column_names

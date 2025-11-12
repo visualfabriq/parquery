@@ -2,6 +2,14 @@
 Release notes for parquery
 ========================
 
+Release  2.0.2
+==============
+- Add mypy type hints for better IDE support
+
+Release  2.0.1
+==============
+- Ensure that serialization to bytes works correctly for all backends
+
 Release  2.0.0
 ==============
 - Fully switch to pyarrow for all data handling and aggregation as the default engine
