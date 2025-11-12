@@ -22,7 +22,7 @@ def serialize_pa_table_bytes(pa_table: pa.Table) -> bytes:
     sink = pa.BufferOutputStream()
     with pa.ipc.RecordBatchStreamWriter(sink, pa_table.schema) as writer:
         writer.write(pa_table)
-    return sink.getvalue()
+    return sink.getvalue().to_pybytes()
 
 
 def deserialize_pa_table_bytes(buf: bytes) -> pa.Table:
