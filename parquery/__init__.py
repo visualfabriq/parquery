@@ -7,6 +7,7 @@ from parquery.aggregate import (
 )
 from parquery.tool import (
     HAS_DUCKDB,
+    SAFE_PREAGGREGATE,
     DataFilter,
     FilterCondition,
     FilterOperator,
@@ -23,11 +24,12 @@ from parquery.transport import (
 from parquery.write import df_to_parquet
 
 pre_release_version = os.getenv("PRE_RELEASE_VERSION", "")
-__version__: str = pre_release_version if pre_release_version else "2.0.4"
+__version__: str = pre_release_version if pre_release_version else "2.0.5"
 
 __all__ = [
     "aggregate_pq",
     "HAS_DUCKDB",
+    "SAFE_PREAGGREGATE",
     "FilterValueError",
     "FilterOperator",
     "FilterCondition",

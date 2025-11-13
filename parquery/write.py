@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import gc
+import logging
 import os
 import pathlib
 from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -167,7 +170,7 @@ def _write_chunked_df(
     while len(df) >= chunksize:
         # select data
         if debug:
-            print("Writing " + str(i) + "-" + str(i + chunksize))
+            logger.debug(f"Writing {i}-{i + chunksize}")
         i += chunksize
         data_table = pa.Table.from_pandas(df[0:chunksize], preserve_index=False)
         df = df[chunksize:]
@@ -182,7 +185,7 @@ def _write_chunked_df(
     # save dangling results
     if not df.empty:
         if debug:
-            print("Writing " + str(i) + "-" + str(i + len(df)))
+            logger.debug(f"Writing {i}-{i + len(df)}")
         data_table = pa.Table.from_pandas(df, preserve_index=False)
         if writer is None:
             writer = pq.ParquetWriter(

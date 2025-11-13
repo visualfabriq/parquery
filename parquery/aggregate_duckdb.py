@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 from typing import Any
 
 try:
@@ -13,6 +14,8 @@ except ImportError:
 import pyarrow as pa
 
 from parquery.tool import DataFilter
+
+logger = logging.getLogger(__name__)
 
 
 def aggregate_pq_duckdb(
@@ -102,7 +105,7 @@ def aggregate_pq_duckdb(
     )
 
     if debug:
-        print(f"DuckDB SQL:\n{sql}\n")
+        logger.debug(f"DuckDB SQL:\n{sql}\n")
 
     # Execute query with DuckDB
     try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -8,6 +9,8 @@ import pyarrow.dataset as ds
 
 # Import shared types and utilities from main aggregate module
 from parquery.tool import SAFE_PREAGGREGATE, DataFilter, create_empty_result
+
+logger = logging.getLogger(__name__)
 
 
 def _unify_aggregation_operators(aggregation_list: list[list[str]]) -> dict[str, str]:
@@ -156,7 +159,7 @@ def aggregate_pq_pyarrow(
         for rg_info in fragment.row_groups:
             row_group_counter += 1
             if debug:
-                print(
+                logger.debug(
                     f"Aggregating row group {row_group_counter} of {total_row_groups}"
                 )
 
@@ -202,7 +205,7 @@ def aggregate_pq_pyarrow(
 
     # combine results
     if debug:
-        print("Combining results")
+        logger.debug("Combining results")
 
     if not result:
         # Return empty PyArrow table with correct schema

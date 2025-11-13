@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import pyarrow as pa
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -166,7 +169,7 @@ def has_missing_filter_columns(
         if col not in existing_cols:
             # Filter references missing column
             if debug:
-                print(
+                logger.debug(
                     f"Filter column '{col}' is missing from file, returning empty result"
                 )
             return True
@@ -281,12 +284,14 @@ def _add_missing_columns_after_engine(
     missing_data = {}
     for col in missing_measure_cols:
         missing_data[col] = [0.0] * table.num_rows
-        print("Adding missing measure column {col} with standard value 0.0")
+        if debug:
+            logger.debug(f"Adding missing measure column {col} with standard value 0.0")
     for col in missing_groupby_cols:
         missing_data[col] = [standard_missing_id] * table.num_rows
-        print(
-            f"Adding missing groupby column {col} with standard value {standard_missing_id}"
-        )
+        if debug:
+            logger.debug(
+                f"Adding missing groupby column {col} with standard value {standard_missing_id}"
+            )
 
     # Create missing columns table and combine with original
     missing_table = pa.table(missing_data)

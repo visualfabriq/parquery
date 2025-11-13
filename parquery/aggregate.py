@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Literal
 
@@ -23,6 +24,8 @@ from parquery.tool import (
 )
 from parquery.aggregate_duckdb import aggregate_pq_duckdb
 from parquery.aggregate_pyarrow import aggregate_pq_pyarrow
+
+logger = logging.getLogger(__name__)
 
 
 def check_libraries(as_df, engine) -> Any:
@@ -163,7 +166,7 @@ def aggregate_pq(
     if not existing_cols:
         # Could be: 1) schema read failed, 2) all requested columns missing
         if debug:
-            print("No requested columns exist in file, returning empty result")
+            logger.debug("No requested columns exist in file, returning empty result")
         return create_empty_result(result_cols, as_df=as_df)
 
     # Check if any filter column is missing

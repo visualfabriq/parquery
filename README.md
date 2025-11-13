@@ -224,6 +224,61 @@ These functions work with pandas DataFrames, Polars DataFrames, and PyArrow Tabl
 - **PyArrow**: Returns a new Table (immutable)
 
 
+Debug Logging
+--------
+ParQuery uses Python's standard logging module for debug output. To see debug messages, you need to configure both the library and your application's logging:
+
+### Basic Setup
+
+```python
+import logging
+
+# Enable debug logging for parquery
+logging.basicConfig(level=logging.DEBUG)
+# Or configure just parquery's logger
+logging.getLogger('parquery').setLevel(logging.DEBUG)
+
+from parquery import aggregate_pq
+
+# Now debug messages will be visible
+result = aggregate_pq(
+    'example.parquet',
+    ['f0'],
+    ['f2'],
+    debug=True  # Enables debug log statements
+)
+```
+
+### AWS Lambda / CloudWatch
+
+In AWS Lambda, stdout automatically goes to CloudWatch Logs. Configure logging at the module level:
+
+```python
+import logging
+import os
+
+# Configure once per Lambda cold start
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+logging.getLogger('parquery').setLevel(LOG_LEVEL)
+
+def lambda_handler(event, context):
+    from parquery import aggregate_pq
+
+    # Debug messages will appear in CloudWatch if LOG_LEVEL=DEBUG
+    result = aggregate_pq('file.parquet', ['col'], ['measure'], debug=True)
+    return result
+```
+
+Set the `LOG_LEVEL` environment variable in your Lambda configuration to control verbosity.
+
+### Production Recommendations
+
+- **Development**: Set `LOG_LEVEL=DEBUG` to see all processing details
+- **Production**: Use `LOG_LEVEL=INFO` or `LOG_LEVEL=WARNING` to reduce noise
+- The `debug` parameter must be `True` for debug messages to be logged
+- Logging level controls whether those messages actually appear
+
+
 Installation
 ---------------------
 
