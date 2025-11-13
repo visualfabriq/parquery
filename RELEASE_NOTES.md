@@ -1,5 +1,8 @@
 # Release Notes for ParQuery
 
+## Release 2.0.6
+- Add specific functions to public api for imports
+
 ## Release 2.0.5
 - Switch to logging instead of stdout
 - Add specific functions to public api for imports
