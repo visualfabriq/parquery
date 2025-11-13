@@ -1,5 +1,9 @@
 # Release Notes for ParQuery
 
+## Release 2.0.4
+- Improve release notes readability
+- Limit public api for imports
+
 ## Release 2.0.3
 - Added documentation for DuckDB backend usage
 - Added comprehensive docstrings to all functions
