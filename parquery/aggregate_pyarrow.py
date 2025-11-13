@@ -7,7 +7,7 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
 # Import shared types and utilities from main aggregate module
-from parquery.tool import DataFilter, SAFE_PREAGGREGATE, create_empty_result
+from parquery.tool import SAFE_PREAGGREGATE, DataFilter, create_empty_result
 
 
 def _unify_aggregation_operators(aggregation_list: list[list[str]]) -> dict[str, str]:
@@ -302,44 +302,6 @@ def groupby_py3(
     rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
-
-
-def add_missing_columns_to_table(
-    table: pa.Table,
-    measure_cols: list[list[str]],
-    all_cols: list[str],
-    standard_missing_id: int,
-    debug: bool,
-) -> pa.Table:
-    """Add missing columns to table with default values."""
-    expected_measure_cols = [x[0] for x in measure_cols]
-
-    # Find all missing columns
-    missing_cols = [col for col in all_cols if col not in table.column_names]
-    if not missing_cols:
-        return table
-
-    # Build all missing columns at once to avoid O(N²) table copies
-    missing_data = {}
-    for col in missing_cols:
-        if col in expected_measure_cols:
-            # missing measure columns get a 0.0 result
-            standard_value = 0.0
-        else:
-            # missing dimension columns get the standard id for missing values
-            standard_value = standard_missing_id
-
-        if debug:
-            print(f"Adding missing column {col} with standard value {standard_value}")
-
-        missing_data[col] = [standard_value] * table.num_rows
-
-    # Create missing columns table and combine with original
-    missing_table = pa.table(missing_data)
-    combined_schema = pa.schema(list(table.schema) + list(missing_table.schema))
-    combined_arrays = list(table.columns) + list(missing_table.columns)
-
-    return pa.Table.from_arrays(combined_arrays, schema=combined_schema)
 
 
 def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
