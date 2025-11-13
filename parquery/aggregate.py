@@ -1,37 +1,69 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Literal
 
 try:
     import pandas as pd
-
-    HAS_PANDAS = True
 except ImportError:
-    HAS_PANDAS = False
-
-try:
-    import duckdb  # noqa: F401
-
-    HAS_DUCKDB = True
-except ImportError:
-    HAS_DUCKDB = False
+    pd = None  # type: ignore
 
 import pyarrow as pa
 
-# Type aliases for filter operations
-FilterOperator = Literal["in", "not in", "nin", "=", "==", "!=", ">", ">=", "<=", "<"]
-FilterCondition = tuple[str, FilterOperator, Any]  # (column, operator, value(s))
-DataFilter = (
-    list[FilterCondition] | list[list[Any]]
-)  # Support both typed and legacy format
+from parquery.tool import (
+    DataFilter,
+    HAS_DUCKDB,
+    HAS_PANDAS,
+    _add_missing_columns_after_engine,
+    create_empty_result,
+    get_existing_columns,
+    get_result_columns,
+    has_missing_filter_columns,
+    normalize_measure_cols,
+)
+from parquery.aggregate_duckdb import aggregate_pq_duckdb
+from parquery.aggregate_pyarrow import aggregate_pq_pyarrow
 
 
-class FilterValueError(ValueError):
-    pass
+def check_libraries(as_df, engine) -> Any:
+    """
+    Check and validate library availability for requested features.
 
+    Validates that required libraries are installed for the requested output format
+    and engine selection. Auto-selects the best available engine if "auto" is specified.
 
-FILTER_CUTOVER_LENGTH = 10
-SAFE_PREAGGREGATE = set(["min", "max", "sum", "one"])
+    Args:
+        as_df: Whether pandas DataFrame output is requested (True requires pandas).
+        engine: Engine selection - "auto" (default), "duckdb", or "pyarrow".
+
+    Returns:
+        Selected engine name ("duckdb" or "pyarrow").
+
+    Raises:
+        ImportError: If pandas is required but not installed (when as_df=True).
+        ImportError: If DuckDB engine is requested but not installed.
+
+    Notes:
+        - "auto" engine selection prefers DuckDB (faster performance) when available.
+        - Falls back to PyArrow if DuckDB is not installed.
+    """
+    if as_df and not HAS_PANDAS:
+        # check if pandas is available, when it's requested
+        raise ImportError(
+            "pandas is required for as_df=True. "
+            "Install with: pip install pandas or uv pip install 'parquery[dataframes]'"
+        )
+
+    # Auto-select engine
+    if engine == "auto":
+        engine = "duckdb" if HAS_DUCKDB else "pyarrow"
+    elif engine == "duckdb" and HAS_DUCKDB is False:
+        raise ImportError(
+            "DuckDB engine requested but not installed. "
+            "Install with: pip install duckdb or uv pip install 'parquery[performance]'"
+        )
+
+    return engine
 
 
 def aggregate_pq(
@@ -40,17 +72,17 @@ def aggregate_pq(
     measure_cols: list[str] | list[list[str]],
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
-    as_df: bool | None = None,
+    as_df: bool = False,
     standard_missing_id: int = -1,
     handle_missing_file: bool = True,
     debug: bool = False,
-    engine: Literal["auto", "duckdb", "pyarrow"] | None = None,
+    engine: Literal["auto", "duckdb", "pyarrow"] = "auto",
 ) -> pd.DataFrame | pa.Table:
     """
     Aggregate a Parquet file using DuckDB (preferred) or PyArrow.
 
     This function automatically selects the best engine for aggregation:
-    - DuckDB: 3-8x faster for most scenarios (default when installed)
+    - DuckDB: Faster for most scenarios (default when installed)
     - PyArrow: Fallback when DuckDB not available, or explicit engine choice
 
     See aggregate_pq_pyarrow() and aggregate_pq_duckdb() for engine-specific details.
@@ -100,64 +132,84 @@ def aggregate_pq(
         >>> result = aggregate_pq('data.parquet', ['country'], ['sales'], engine='pyarrow')
 
     Notes:
-        - DuckDB is 3-8x faster for most workloads
+        - DuckDB provides better performance for most workloads
         - Install DuckDB: pip install 'parquery[performance]'
         - Both engines return identical results
     """
-    if engine is None:
-        engine = "auto"
+    engine = check_libraries(as_df, engine)
 
-    # Smart default: use pandas if available, otherwise PyArrow
-    if as_df is None:
-        as_df = HAS_PANDAS
+    # Normalize data_filter and measure_cols
+    data_filter = data_filter or []
+    measure_cols = normalize_measure_cols(measure_cols)
 
-    if as_df and not HAS_PANDAS:
-        raise ImportError(
-            "pandas is required for as_df=True. "
-            "Install with: pip install pandas or uv pip install 'parquery[dataframes]'"
-        )
+    # Get result columns for empty result case
+    result_cols = get_result_columns(groupby_cols, measure_cols)
+    input_cols = set(
+        groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter]
+    )
 
-    # Auto-select engine
-    if engine == "auto":
-        engine = "duckdb" if HAS_DUCKDB else "pyarrow"
+    # Check if file exists (if not, return empty if handle_missing_file=True)
+    if not os.path.exists(file_name):
+        if handle_missing_file:
+            return create_empty_result(result_cols, as_df=as_df)
+        else:
+            raise OSError(f"File not found: {file_name}")
+
+    # Get existing columns from Parquet schema
+    # get_existing_columns returns intersection of requested columns and schema columns
+    existing_cols = get_existing_columns(file_name, input_cols)
+
+    # Check if schema read failed or file is invalid
+    if not existing_cols:
+        # Could be: 1) schema read failed, 2) all requested columns missing
+        if debug:
+            print("No requested columns exist in file, returning empty result")
+        return create_empty_result(result_cols, as_df=as_df)
+
+    # Check if any filter column is missing
+    if has_missing_filter_columns(data_filter, existing_cols, debug=debug):
+        return create_empty_result(result_cols, as_df=as_df)
+
+    # Filter inputs to only existing columns
+    # Engines should only work with columns that exist
+    filtered_groupby_cols = [col for col in groupby_cols if col in existing_cols]
+    filtered_measure_cols = [
+        [col, op, output] for col, op, output in measure_cols if col in existing_cols
+    ]
 
     # Route to appropriate engine (engines always return PyArrow Tables)
+    # Engines receive only existing columns
     if engine == "duckdb":
-        if not HAS_DUCKDB:
-            raise ImportError(
-                "DuckDB engine requested but not installed. "
-                "Install with: pip install duckdb or uv pip install 'parquery[performance]'"
-            )
-        # Import here to avoid circular dependency
-        from parquery.aggregate_duckdb import aggregate_pq_duckdb
-
         result = aggregate_pq_duckdb(
             file_name=file_name,
-            groupby_cols=groupby_cols,
-            measure_cols=measure_cols,
+            groupby_cols=filtered_groupby_cols,
+            measure_cols=filtered_measure_cols,
             data_filter=data_filter,
             aggregate=aggregate,
-            standard_missing_id=standard_missing_id,
-            handle_missing_file=handle_missing_file,
             debug=debug,
         )
     elif engine == "pyarrow":
-        from parquery.aggregate_pyarrow import aggregate_pq_pyarrow
-
         result = aggregate_pq_pyarrow(
             file_name=file_name,
-            groupby_cols=groupby_cols,
-            measure_cols=measure_cols,
+            groupby_cols=filtered_groupby_cols,
+            measure_cols=filtered_measure_cols,
             data_filter=data_filter,
             aggregate=aggregate,
-            standard_missing_id=standard_missing_id,
-            handle_missing_file=handle_missing_file,
             debug=debug,
         )
     else:
         raise ValueError(
             f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'"
         )
+
+    # Add missing expected columns to the result with default values
+    result = _add_missing_columns_after_engine(
+        result,
+        groupby_cols,
+        measure_cols,
+        standard_missing_id=standard_missing_id,
+        debug=debug,
+    )
 
     # Convert to pandas if requested (engines always return PyArrow Tables)
     if as_df:

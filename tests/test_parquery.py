@@ -1212,15 +1212,16 @@ class TestParquery(object):
 
     def test_non_existing_column(self, engine):
         """
-        test_non_existing_column: check the handling of missing columns in the parquet file
-        measure columns should get 0.0 as value
-        dimension columns should get the default -1 (unknown) identifier
+        test_non_existing_column: when ALL requested columns are missing,
+        return empty result
         """
         iterable = ((x, x, x) for x in range(20000))
         schema_3col = [("f0", "int64"), ("f1", "int64"), ("f2", "int64")]
         table = create_table_from_generator(iterable, schema_3col)
         filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, filename)
+
+        # All requested columns missing -> empty result
         result_parquery = aggregate_pq(
             filename,
             ["d1", "d3"],
@@ -1230,8 +1231,65 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert sum(result_parquery["m2"].to_pylist()) == 0.0
-        assert list(set(result_parquery["d3"].to_pylist())) == [-1]
+        assert result_parquery.num_rows == 0
+        assert sorted(result_parquery.column_names) == ["d1", "d3", "m1", "m2"]
+
+        # At least one column exists -> fill missing with defaults
+        result_parquery = aggregate_pq(
+            filename,
+            ["f0", "d1"],
+            ["m1"],
+            data_filter=[],
+            aggregate=True,
+            as_df=False,
+            engine=engine,
+        )
+        assert result_parquery.num_rows > 0
+        assert sorted(result_parquery.column_names) == ["d1", "f0", "m1"]
+        # d1 doesn't exist -> filled with -1
+        assert list(set(result_parquery["d1"].to_pylist())) == [-1]
+        # m1 doesn't exist -> filled with 0.0
+        assert sum(result_parquery["m1"].to_pylist()) == 0.0
+
+        os.unlink(filename)
+
+    def test_filter_on_missing_column(self, engine):
+        """
+        test_filter_on_missing_column: when filtering on a column that doesn't exist,
+        return empty result (simple and safe approach)
+        """
+        iterable = ((x, x, x) for x in range(100))
+        schema_3col = [("f0", "int64"), ("f1", "int64"), ("f2", "int64")]
+        table = create_table_from_generator(iterable, schema_3col)
+        filename = tempfile.mkstemp(prefix="test-")[-1]
+        df_to_parquet(table, filename)
+
+        # Filter on missing column should return empty result
+        result_parquery = aggregate_pq(
+            filename,
+            ["f0"],
+            ["f1"],
+            data_filter=[["missing_col", "==", 5]],
+            aggregate=True,
+            as_df=False,
+            engine=engine,
+        )
+        assert result_parquery.num_rows == 0
+        assert sorted(result_parquery.column_names) == ["f0", "f1"]
+
+        # Multiple filters with one missing should also return empty
+        result_parquery = aggregate_pq(
+            filename,
+            ["f0"],
+            ["f1"],
+            data_filter=[["f0", ">", 50], ["missing_col", "in", [1, 2, 3]]],
+            aggregate=True,
+            as_df=False,
+            engine=engine,
+        )
+        assert result_parquery.num_rows == 0
+
+        os.unlink(filename)
 
     def test_non_existing_file(self, engine):
         """

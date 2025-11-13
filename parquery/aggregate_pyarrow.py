@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import gc
-import os
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
-# Import shared types from main aggregate module
-from parquery.aggregate import (
-    DataFilter,
-    SAFE_PREAGGREGATE,
-)
+# Import shared types and utilities from main aggregate module
+from parquery.tool import DataFilter, SAFE_PREAGGREGATE, create_empty_result
 
 
 def _unify_aggregation_operators(aggregation_list: list[list[str]]) -> dict[str, str]:
@@ -23,11 +19,9 @@ def _unify_aggregation_operators(aggregation_list: list[list[str]]) -> dict[str,
 def aggregate_pq_pyarrow(
     file_name: str,
     groupby_cols: list[str],
-    measure_cols: list[str] | list[list[str]],
+    measure_cols: list[list[str]],
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
-    standard_missing_id: int = -1,
-    handle_missing_file: bool = True,
     debug: bool = False,
 ) -> pa.Table:
     """
@@ -98,9 +92,6 @@ def aggregate_pq_pyarrow(
     """
     data_filter = data_filter or []
 
-    # check measure_cols
-    measure_cols = check_measure_cols(measure_cols)
-
     # Memory optimization strategies:
     #
     # 1. THREADING: Disable for many measures
@@ -121,10 +112,19 @@ def aggregate_pq_pyarrow(
     # Disable pre-aggregation when we have many dimensions (high cardinality groupby)
     disable_preaggregate = len(groupby_cols) >= 5
 
-    # check which columns we need in total
-    all_cols, input_cols, result_cols = get_cols(
-        data_filter, groupby_cols, measure_cols
+    # Get all columns needed (only columns that exist)
+    all_cols = sorted(
+        list(
+            set(
+                groupby_cols
+                + [x[0] for x in measure_cols]
+                + [x[0] for x in data_filter]
+            )
+        )
     )
+
+    # Input columns (for processing, before renaming)
+    input_cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols])))
 
     # create pandas-compliant aggregation
     agg = _unify_aggregation_operators(measure_cols)
@@ -134,10 +134,6 @@ def aggregate_pq_pyarrow(
         aggregate and agg_ops.issubset(SAFE_PREAGGREGATE) and not disable_preaggregate
     )
 
-    # if the file does not exist, give back an empty result
-    if not os.path.exists(file_name) and handle_missing_file:
-        return create_empty_result(result_cols)
-
     # Create dataset (replaces ParquetFile)
     try:
         dataset = ds.dataset(file_name, format="parquet")
@@ -145,18 +141,8 @@ def aggregate_pq_pyarrow(
         gc.collect()
         dataset = ds.dataset(file_name, format="parquet")
 
-    # check if we have all dimensions from the filters
-    schema_names = dataset.schema.names
-    for col, _, _ in data_filter:
-        if col not in schema_names:
-            return create_empty_result(result_cols)
-
     # Convert data filter to PyArrow expression (automatic push-down)
     data_filter_expr = convert_data_filter(data_filter) if data_filter else None
-
-    # Filter columns to only those that exist in the schema
-    # (missing columns will be added afterward)
-    existing_cols = [col for col in all_cols if col in schema_names]
 
     # Get fragments with automatic filter push-down
     fragments = list(dataset.get_fragments(filter=data_filter_expr))
@@ -179,24 +165,19 @@ def aggregate_pq_pyarrow(
 
             try:
                 sub = fragment_subset.to_table(
-                    columns=existing_cols, filter=data_filter_expr
+                    columns=all_cols, filter=data_filter_expr
                 )
             except OSError:
                 gc.collect()
                 pa.default_memory_pool().release_unused()  # Return memory to OS
                 sub = fragment_subset.to_table(
-                    columns=existing_cols, filter=data_filter_expr
+                    columns=all_cols, filter=data_filter_expr
                 )
 
             # Skip if no rows after filtering
             if sub.num_rows == 0:
                 del sub
                 continue
-
-            # add missing requested columns
-            sub = add_missing_columns_to_table(
-                sub, measure_cols, all_cols, standard_missing_id, debug
-            )
 
             # unneeded columns (when we filter on a non-result column)
             unneeded_columns = [
@@ -224,7 +205,9 @@ def aggregate_pq_pyarrow(
         print("Combining results")
 
     if not result:
-        return create_empty_result(result_cols)
+        # Return empty PyArrow table with correct schema
+        result_cols = groupby_cols + [x[2] for x in measure_cols]
+        return create_empty_result(result_cols, as_df=False)
 
     table = finalize_group_by(
         result, groupby_cols, agg, aggregate, use_threads=not disable_threads
@@ -237,8 +220,6 @@ def aggregate_pq_pyarrow(
         ]
         table = table.rename_columns(new_columns)
 
-    table = table.select(result_cols)
-
     return table
 
 
@@ -249,6 +230,27 @@ def finalize_group_by(
     aggregate: bool,
     use_threads: bool = True,
 ) -> pa.Table:
+    """
+    Finalize aggregation by combining row group results and performing final groupby.
+
+    Concatenates multiple PyArrow Tables from row group processing and performs
+    a final aggregation if needed. Also manages memory cleanup after combining results.
+
+    Args:
+        result: List of PyArrow Tables from individual row group processing.
+        groupby_cols: List of column names to group by (dimensions).
+        agg: Dictionary mapping column names to aggregation operations.
+        aggregate: If True, performs final GROUP BY aggregation.
+        use_threads: Whether to use threading for aggregation (default True).
+
+    Returns:
+        Single PyArrow Table containing final aggregated results.
+
+    Notes:
+        - If only one table in result, returns it directly without concatenation.
+        - Calls gc.collect() and releases unused memory after concatenation.
+        - Threading is disabled automatically when processing many measures (>=20).
+    """
     if len(result) == 1:
         table = result[0]
     else:
@@ -270,6 +272,27 @@ def groupby_py3(
     table: pa.Table,
     use_threads: bool = True,
 ) -> pa.Table:
+    """
+    Perform PyArrow group-by aggregation on a table.
+
+    Uses PyArrow's native group_by() and aggregate() functions to perform
+    in-memory aggregations. Automatically renames output columns to match
+    input column names (removes operation suffixes).
+
+    Args:
+        groupby_cols: List of column names to group by (dimensions).
+        agg: Dictionary mapping column names to aggregation operations (e.g., {"m1": "sum"}).
+        table: PyArrow Table to aggregate.
+        use_threads: Whether to use threading for the aggregation (default True).
+
+    Returns:
+        Aggregated PyArrow Table with renamed columns.
+
+    Notes:
+        - If agg is empty, returns the table unchanged.
+        - PyArrow adds operation suffixes (e.g., "col_sum"); these are removed.
+        - Supports operations: sum, mean, stddev, count, count_distinct, min, max.
+    """
     if not agg:
         return table
 
@@ -279,14 +302,6 @@ def groupby_py3(
     rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
-
-
-def create_empty_result(result_cols: list[str]) -> pa.Table:
-    """Create an empty PyArrow Table with the specified columns."""
-    # Create empty PyArrow table with schema
-    schema = pa.schema([(col, pa.null()) for col in result_cols])
-    empty_table = pa.Table.from_pydict({col: [] for col in result_cols}, schema=schema)
-    return empty_table
 
 
 def add_missing_columns_to_table(
@@ -360,34 +375,3 @@ def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
             data_filter_expr = data_filter_expr & expr
 
     return data_filter_expr
-
-
-def check_measure_cols(measure_cols: list[str] | list[list[str]]) -> list[list[str]]:
-    """Normalize measure columns to list of [column, operation, output_name]."""
-    measure_cols = [x if isinstance(x, list) else [x] for x in measure_cols]
-    for agg_ops in measure_cols:
-        if len(agg_ops) == 1:
-            # standard expect a sum aggregation with the same column name
-            agg_ops.extend(["sum", agg_ops[0]])
-        elif len(agg_ops) == 2:
-            # assume the same column name if not specified
-            agg_ops.append(agg_ops[0])
-    return measure_cols
-
-
-def get_cols(
-    data_filter: DataFilter, groupby_cols: list[str], measure_cols: list[list[str]]
-) -> tuple[list[str], list[str], list[str]]:
-    """Get all columns, input columns, and result columns from query parameters."""
-    all_cols = sorted(
-        list(
-            set(
-                groupby_cols
-                + [x[0] for x in measure_cols]
-                + [x[0] for x in data_filter]
-            )
-        )
-    )
-    input_cols = list(set(groupby_cols + [x[0] for x in measure_cols]))
-    result_cols = sorted(list(set(groupby_cols + [x[2] for x in measure_cols])))
-    return all_cols, input_cols, result_cols

@@ -4,11 +4,6 @@ import os
 
 from parquery.aggregate import (
     HAS_DUCKDB,
-    SAFE_PREAGGREGATE,
-    DataFilter,
-    FilterCondition,
-    FilterOperator,
-    FilterValueError,
     aggregate_pq,
 )
 
@@ -25,7 +20,15 @@ try:
 except ImportError:
     pass
 
-from parquery.tool import df_to_natural_name, df_to_original_name
+from parquery.tool import (
+    df_to_natural_name,
+    df_to_original_name,
+    FilterOperator,
+    FilterCondition,
+    DataFilter,
+    FilterValueError,
+    SAFE_PREAGGREGATE,
+)
 from parquery.transport import (
     deserialize_pa_table_base64,
     deserialize_pa_table_bytes,

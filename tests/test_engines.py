@@ -8,12 +8,7 @@ import tempfile
 import pyarrow as pa
 import pytest
 
-from parquery import HAS_DUCKDB, aggregate_pq, aggregate_pq_pyarrow, df_to_parquet
-
-try:
-    from parquery import aggregate_pq_duckdb
-except ImportError:
-    aggregate_pq_duckdb = None
+from parquery import HAS_DUCKDB, aggregate_pq, df_to_parquet
 
 
 @pytest.fixture
@@ -301,14 +296,18 @@ class TestEngineBackwardCompatibility:
         assert result.num_rows == 3
 
     def test_pyarrow_direct_call(self, test_parquet_file):
-        """Test direct call to aggregate_pq_pyarrow (always returns PyArrow Table)."""
-        result = aggregate_pq_pyarrow(test_parquet_file, ["group_id"], [["m1", "sum"]])
+        """Test call to aggregate_pq with explicit pyarrow engine (returns PyArrow Table)."""
+        result = aggregate_pq(
+            test_parquet_file, ["group_id"], ["m1"], engine="pyarrow", as_df=False
+        )
         assert isinstance(result, pa.Table)
         assert result.num_rows == 3
 
     @pytest.mark.skipif(not HAS_DUCKDB, reason="DuckDB not installed")
     def test_duckdb_direct_call(self, test_parquet_file):
-        """Test direct call to aggregate_pq_duckdb (always returns PyArrow Table)."""
-        result = aggregate_pq_duckdb(test_parquet_file, ["group_id"], [["m1", "sum"]])
+        """Test call to aggregate_pq with explicit duckdb engine (returns PyArrow Table)."""
+        result = aggregate_pq(
+            test_parquet_file, ["group_id"], ["m1"], engine="duckdb", as_df=False
+        )
         assert isinstance(result, pa.Table)
         assert result.num_rows == 3

@@ -5,11 +5,18 @@ ParQuery is a query and aggregation framework for parquet files, enabling very f
 
 Parquet is a light weight package that provides columnar, chunked data containers that can be compressed on-disk. It excels at storing and sequentially accessing large, numerical data sets.
 
-The ParQuery framework provides methods to perform query and aggregation operations on Parquet containers using PyArrow. It also contains helpers for serializing and de-serializing PyArrow tables, and writing DataFrames to Parquet. It is based on an OLAP-approach to aggregations with Dimensions and Measures.
+The ParQuery framework provides methods to perform query and aggregation operations on Parquet containers using **DuckDB** (preferred) or **PyArrow**. It also contains helpers for serializing and de-serializing PyArrow tables, and writing DataFrames to Parquet. It is based on an OLAP-approach to aggregations with Dimensions and Measures.
 
 Visualfabriq uses Parquet and ParQuery to reliably handle billions of records for our clients with real-time reporting and machine learning usage.
 
-ParQuery requires only **PyArrow** as a core dependency. Pandas, NumPy, and Polars are optional dependencies for DataFrame support.
+**Performance:** ParQuery automatically uses DuckDB when available for faster aggregations compared to PyArrow. DuckDB provides streaming execution with minimal memory footprint.
+
+**Dependencies:**
+- **Required:** PyArrow (core functionality)
+- **Optional:**
+  - Pandas, NumPy (DataFrame support)
+  - Polars (efficient DataFrame I/O)
+  - DuckDB (performance boost for aggregations)
 
 Aggregation
 --------
@@ -46,13 +53,17 @@ The `aggregation_list` contains the aggregation operations, which can be:
 - a list of lists where each list additionally includes an output column name
     - `[['m1', 'sum', 'm1_sum'], ['m1', 'count', 'm1_count'], ...]`
 
-* `sum`
-* `mean` arithmetic mean (average)
-* `std` standard deviation
-* `count`
-* `count_na`
-* `count_distinct`
-* `sorted_count_distinct`
+Supported aggregation operations:
+* `sum` - Sum of values
+* `mean` / `avg` - Arithmetic mean (average)
+* `std` / `stddev` - Standard deviation
+* `count` - Count of non-null values
+* `count_na` - Count of null values
+* `count_distinct` - Count of unique values
+* `sorted_count_distinct` - Count of unique values (sorted)
+* `min` - Minimum value
+* `max` - Maximum value
+* `one` - Pick any value (useful for dimension columns)
 
 ### Data Filter Supported Operations
 The data_filter is optional and contains filters to be applied before the aggregation. Push-down filtering is applied to enhance performance using the parquet characteristics. It balances numexpr evaluation and Pandas filtering for optimal performance.
@@ -93,6 +104,33 @@ pa_table = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=False)
 # Return results as pandas DataFrame (requires pandas)
 df = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=True)
 ```
+
+### Engine Selection
+
+ParQuery supports two execution engines with automatic selection:
+
+**DuckDB Engine (Recommended)**
+- Faster than PyArrow for most workloads
+- Streaming execution with minimal memory footprint
+- Uses SQL-based query optimization
+- Install: `pip install duckdb` or `uv pip install 'parquery[performance]'`
+
+**PyArrow Engine (Fallback)**
+- Pure Python with no external dependencies (beyond PyArrow)
+- Row-group level processing for memory efficiency
+- Automatic fallback when DuckDB is not installed
+
+**Usage:**
+```python
+# Auto-select engine (DuckDB if available, otherwise PyArrow)
+result = aggregate_pq('example.parquet', ['f0'], ['f2'])
+
+# Force specific engine
+result = aggregate_pq('example.parquet', ['f0'], ['f2'], engine='duckdb')
+result = aggregate_pq('example.parquet', ['f0'], ['f2'], engine='pyarrow')
+```
+
+**Note:** Both engines return identical results and support all the same operations. The engine parameter is primarily for performance tuning or debugging.
 
 
 Serialization and De-Serialization
@@ -194,7 +232,13 @@ Installation
 # Install with PyArrow only (core functionality)
 pip install parquery
 
-# Install with optional dependencies (pandas, numpy, polars)
+# Install with DuckDB for better performance
+pip install parquery[performance]
+
+# Install with DataFrame support (pandas, numpy, polars)
+pip install parquery[dataframes]
+
+# Install with all optional dependencies
 pip install parquery[optional]
 ```
 
@@ -207,7 +251,7 @@ cd parquery
 python setup.py build_ext --inplace
 python setup.py install
 
-# Or install with optional dependencies
+# Or install with all optional dependencies
 pip install -e .[optional]
 ```
 
@@ -216,9 +260,17 @@ pip install -e .[optional]
 # Core installation
 uv pip install parquery
 
-# With optional dependencies
-uv pip install parquery[optional]
+# With DuckDB for better performance
+uv pip install 'parquery[performance]'
+
+# With DataFrame support
+uv pip install 'parquery[dataframes]'
+
+# With all optional dependencies
+uv pip install 'parquery[optional]'
 ```
+
+**Recommended:** Install with `[performance]` extras to get DuckDB for faster aggregations.
 
 Testing
 -------
