@@ -6,6 +6,7 @@ from parquery.aggregate import (
     aggregate_pq,
 )
 from parquery.tool import (
+    HAS_DUCKDB,
     DataFilter,
     FilterCondition,
     FilterOperator,
@@ -26,6 +27,7 @@ __version__: str = pre_release_version if pre_release_version else "2.0.4"
 
 __all__ = [
     "aggregate_pq",
+    "HAS_DUCKDB",
     "FilterValueError",
     "FilterOperator",
     "FilterCondition",
