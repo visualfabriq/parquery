@@ -21,13 +21,13 @@ except ImportError:
     pass
 
 from parquery.tool import (
+    SAFE_PREAGGREGATE,
+    DataFilter,
+    FilterCondition,
+    FilterOperator,
+    FilterValueError,
     df_to_natural_name,
     df_to_original_name,
-    FilterOperator,
-    FilterCondition,
-    DataFilter,
-    FilterValueError,
-    SAFE_PREAGGREGATE,
 )
 from parquery.transport import (
     deserialize_pa_table_base64,
@@ -38,7 +38,7 @@ from parquery.transport import (
 from parquery.write import df_to_parquet
 
 pre_release_version = os.getenv("PRE_RELEASE_VERSION", "")
-__version__: str = pre_release_version if pre_release_version else "2.0.2"
+__version__: str = pre_release_version if pre_release_version else "2.0.3"
 
 __all__ = [
     "aggregate_pq",
