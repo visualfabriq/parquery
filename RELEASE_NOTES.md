@@ -1,5 +1,11 @@
 # Release Notes for ParQuery
 
+## Release 2.0.7
+- Add configurable DuckDB memory limit via `DUCKDB_MEMORY_LIMIT` environment variable
+- Prevents DuckDB OOM on containers with limited memory (e.g. ECS tasks with multiple Gunicorn workers)
+- When set (e.g. `DUCKDB_MEMORY_LIMIT=2GB`), DuckDB spills to temp storage instead of allocating unbounded memory
+- No performance penalty — benchmark shows equal or faster execution with bounded memory
+
 ## Release 2.0.6
 - Add specific functions to public api for imports
 
