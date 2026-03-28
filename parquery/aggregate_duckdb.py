@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 import logging
+import os
 from typing import Any
 
 try:
@@ -16,6 +17,8 @@ import pyarrow as pa
 from parquery.tool import DataFilter
 
 logger = logging.getLogger(__name__)
+
+DUCKDB_MEMORY_LIMIT: str | None = os.environ.get("DUCKDB_MEMORY_LIMIT")
 
 
 def aggregate_pq_duckdb(
@@ -135,7 +138,10 @@ def call_duckdb(sql) -> Any:
         - Connection is automatically closed after query execution.
         - Results are streamed via RecordBatchReader and converted to Table.
     """
-    conn = duckdb.connect(":memory:")
+    config = {}
+    if DUCKDB_MEMORY_LIMIT:
+        config["memory_limit"] = DUCKDB_MEMORY_LIMIT
+    conn = duckdb.connect(":memory:", config=config)
     # arrow() returns a RecordBatchReader, convert to Table
     reader = conn.execute(sql).arrow()
     result_arrow = reader.read_all()
