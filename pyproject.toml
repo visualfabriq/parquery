@@ -47,6 +47,7 @@ all = [
 [dependency-groups]
 test = [
     "pytest",
+    "pytest-cov",
     "coverage",
     "duckdb>=1.0.0",
     "mypy",
