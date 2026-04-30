@@ -125,7 +125,6 @@ workflows:
           filters:
             branches:
               ignore:
-                - master
                 - main
                 - /release\/.*/
       - publish-dev:
@@ -134,29 +133,28 @@ workflows:
           filters:
             branches:
               ignore:
-                - master
                 - main
                 - /release\/.*/
 
-      # Master/main: publish RC + approval-gated release-branch creation
+      # Main: publish RC + approval-gated release-branch creation
       - publish-rc:
           context: [sdlc, codeartifact-dev]
           requires: [test]
           filters:
             branches:
-              only: [master, main]
+              only: main
       - approve-create-release-branch:
           type: approval
           requires: [publish-rc]
           filters:
             branches:
-              only: [master, main]
+              only: main
       - create-release-branch:
           context: [sdlc, codeartifact-dev]
           requires: [approve-create-release-branch]
           filters:
             branches:
-              only: [master, main]
+              only: main
 
       # Release branches: publish final + create GitHub release
       - publish-release:
