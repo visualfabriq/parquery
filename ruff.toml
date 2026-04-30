@@ -1,0 +1,26 @@
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "N",
+]
+ignore = [
+    "E501",
+    "B008",
+]
+fixable = ["ALL"]
+
+[lint.isort]
+force-single-line = true
+known-first-party = ["parquery"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

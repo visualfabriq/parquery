@@ -1,10 +1,82 @@
-[build-system]
-# Minimum requirements for the build system to execute.
-requires = [
-  "setuptools",
-  "wheel",
-  "pyarrow>=22.0.0",
+[project]
+name = "parquery"
+version = "2.0.7"
+description = "A query and aggregation framework for Parquet"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Carst Vaartjes", email = "cvaartjes@visualfabriq.com" },
 ]
+maintainers = [
+    { name = "Jelle Verstraaten", email = "jverstraaten@visualfabriq.com" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Unix",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "pyarrow>=22.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/visualfabriq/parquery"
+
+[project.optional-dependencies]
+performance = ["duckdb>=1.0.0"]
+dataframes = ["numpy", "pandas>=1.5.3", "polars>=0.19.0"]
+all = [
+    "numpy",
+    "pandas>=1.5.3",
+    "polars>=0.19.0",
+    "duckdb>=1.0.0",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+    "coverage",
+    "duckdb>=1.0.0",
+    "mypy",
+]
+
+[build-system]
+requires = [
+    "setuptools>=64",
+    "wheel",
+    "pyarrow>=22.0.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["parquery*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+parquery = ["py.typed"]
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "private"
+url = "https://visualfabriq-103613169272.d.codeartifact.eu-west-1.amazonaws.com/pypi/private/simple"
+default = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv"]
+skips = ["B101", "B104"]
 
 [tool.black]
 target-version = ['py311', 'py312', 'py313', 'py314']
@@ -13,7 +85,6 @@ exclude = '''
   | \.egg
   | \.git
   | build
-  | setup.py
 )
 '''
 
@@ -26,7 +97,6 @@ check_untyped_defs = true
 no_implicit_optional = true
 show_error_codes = true
 
-# Handle optional dependencies and PyArrow
 [[tool.mypy.overrides]]
 module = ["pandas.*", "numpy.*", "polars.*", "duckdb.*", "pyarrow.*"]
 ignore_missing_imports = true
