@@ -77,27 +77,7 @@ jobs:
       - codeartifact/push:
           tool: twine
 
-  publish-rc:
-    executor:
-      <<: *python_executor_small
-    steps:
-      - checkout
-      - codeartifact/init:
-          tool: pip
-      - export-uv-auth
-      - codeartifact/pre_release_version:
-          package: parquery
-          output-var-name: RELEASE_VERSION
-          suffix: rc
-      - codeartifact/stamp-version:
-          version-file: pyproject.toml
-      - run:
-          name: Build
-          command: uv build
-      - codeartifact/push:
-          tool: twine
-
-  publish-release:
+  publish-package:
     executor:
       <<: *python_executor_small
     steps:
@@ -119,13 +99,6 @@ jobs:
           version: $RELEASE_VERSION
           release-assets: "dist/*.tar.gz dist/*.whl"
 
-  create-release-branch:
-    executor:
-      <<: *python_executor_small
-    steps:
-      - checkout
-      - sdlc/create-release-branch
-
 workflows:
   parquery:
     jobs:
@@ -140,42 +113,18 @@ workflows:
           requires: [test, test-arm64]
           filters:
             branches:
-              ignore:
-                - main
-                - /release\/.*/
+              ignore: main
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
           filters:
             branches:
-              ignore:
-                - main
-                - /release\/.*/
+              ignore: main
 
-      # Main: publish RC + approval-gated release-branch creation
-      - publish-rc:
+      # Main: every merge is a full release
+      - publish-package:
           context: [sdlc, codeartifact-dev]
           requires: [test, test-arm64]
           filters:
             branches:
               only: main
-      - approve-create-release-branch:
-          type: approval
-          requires: [publish-rc]
-          filters:
-            branches:
-              only: main
-      - create-release-branch:
-          context: [sdlc, codeartifact-dev]
-          requires: [approve-create-release-branch]
-          filters:
-            branches:
-              only: main
-
-      # Release branches: publish final + create GitHub release
-      - publish-release:
-          context: [sdlc, codeartifact-dev]
-          requires: [test, test-arm64]
-          filters:
-            branches:
-              only: /release\/.*/
