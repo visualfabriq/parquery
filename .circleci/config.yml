@@ -53,12 +53,9 @@ jobs:
       - codeartifact/init:
           tool: pip
       - export-uv-auth
-      - run:
-          name: Install test dependencies
-          command: uv sync --frozen --group test
-      - run:
-          name: Run tests (arm64 smoke)
-          command: .venv/bin/python -m pytest tests
+      - sdlc/run-tests-with-coverage:
+          uv-sync-group: test
+          diff-coverage-threshold: 80
 
   publish-dev:
     executor:
