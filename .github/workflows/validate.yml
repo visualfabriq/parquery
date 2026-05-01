@@ -1,8 +1,0 @@
-name: Validate
-on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-
-jobs:
-  validate:
-    uses: visualfabriq/.github/.github/workflows/validate-pr.yml@main
