@@ -47,7 +47,7 @@ jobs:
     executor:
       name: sdlc/python
       python-version: "3.11"
-      resource-class: arm64.medium
+      resource-class: arm.medium
     steps:
       - checkout
       - codeartifact/init:
