@@ -99,6 +99,13 @@ jobs:
           version: $RELEASE_VERSION
           release-assets: "dist/*.tar.gz dist/*.whl"
 
+  create-release-branch:
+    executor:
+      <<: *python_executor_small
+    steps:
+      - checkout
+      - sdlc/create-release-branch
+
 workflows:
   parquery:
     jobs:
@@ -113,18 +120,40 @@ workflows:
           requires: [test, test-arm64]
           filters:
             branches:
-              ignore: main
+              ignore:
+                - main
+                - /release\/.*/
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
           filters:
             branches:
-              ignore: main
+              ignore:
+                - main
+                - /release\/.*/
 
-      # Main: every merge is a full release
+      - approve-create-release-branch:
+          type: approval
+          requires: [test, test-arm64]
+          filters:
+            branches:
+              ignore:
+                - main
+                - /release\/.*/
+      - create-release-branch:
+          context: [sdlc, codeartifact-dev]
+          requires: [approve-create-release-branch]
+          filters:
+            branches:
+              ignore:
+                - main
+                - /release\/.*/
+
       - publish-package:
           context: [sdlc, codeartifact-dev]
           requires: [test, test-arm64]
           filters:
             branches:
-              only: main
+              only:
+                - main
+                - /release\/.*/
