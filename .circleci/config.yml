@@ -43,6 +43,23 @@ jobs:
           uv-sync-group: test
           diff-coverage-threshold: 80
 
+  test-arm64:
+    executor:
+      name: sdlc/python
+      python-version: "3.11"
+      resource-class: arm.medium
+    steps:
+      - checkout
+      - codeartifact/init:
+          tool: pip
+      - export-uv-auth
+      - run:
+          name: Install test dependencies
+          command: uv sync --frozen --group test
+      - run:
+          name: Run tests (arm64 smoke)
+          command: .venv/bin/python -m pytest tests
+
   publish-dev:
     executor:
       <<: *python_executor_small
@@ -117,11 +134,13 @@ workflows:
     jobs:
       - test:
           context: [sdlc, codeartifact-dev]
+      - test-arm64:
+          context: [sdlc, codeartifact-dev]
 
       # Feature branches: opt-in dev publish
       - approve-publish-dev:
           type: approval
-          requires: [test]
+          requires: [test, test-arm64]
           filters:
             branches:
               ignore:
@@ -139,7 +158,7 @@ workflows:
       # Main: publish RC + approval-gated release-branch creation
       - publish-rc:
           context: [sdlc, codeartifact-dev]
-          requires: [test]
+          requires: [test, test-arm64]
           filters:
             branches:
               only: main
@@ -159,7 +178,7 @@ workflows:
       # Release branches: publish final + create GitHub release
       - publish-release:
           context: [sdlc, codeartifact-dev]
-          requires: [test]
+          requires: [test, test-arm64]
           filters:
             branches:
               only: /release\/.*/
