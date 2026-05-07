@@ -104,7 +104,8 @@ jobs:
       <<: *python_executor_small
     steps:
       - checkout
-      - sdlc/create-release-branch
+      - sdlc/create-release-branch:
+          release-type: python-package
 
 workflows:
   parquery:
@@ -122,7 +123,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /release\/.*/
+                - /^release-v\d+$/
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
@@ -130,7 +131,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /release\/.*/
+                - /^release-v\d+$/
 
       - approve-create-release-branch:
           type: approval
@@ -139,7 +140,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /release\/.*/
+                - /^release-v\d+$/
       - create-release-branch:
           context: [sdlc, codeartifact-dev]
           requires: [approve-create-release-branch]
@@ -147,7 +148,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /release\/.*/
+                - /^release-v\d+$/
 
       - publish-package:
           context: [sdlc, codeartifact-dev]
@@ -156,4 +157,4 @@ workflows:
             branches:
               only:
                 - main
-                - /release\/.*/
+                - /^release-v\d+$/
