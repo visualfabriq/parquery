@@ -108,17 +108,26 @@ jobs:
           release-type: python-package
 
 workflows:
-  parquery:
+  test:
     jobs:
       - test:
           context: [sdlc, codeartifact-dev]
       - test-arm64:
           context: [sdlc, codeartifact-dev]
+      - publish-package:
+          context: [sdlc, codeartifact-dev]
+          requires: [test, test-arm64]
+          filters:
+            branches:
+              only:
+                - main
+                - /^release-v\d+$/
 
-      # Feature branches: opt-in dev publish
+  # Feature branches: opt-in dev publish
+  publish-dev:
+    jobs:
       - approve-publish-dev:
           type: approval
-          requires: [test, test-arm64]
           filters:
             branches:
               ignore:
@@ -133,9 +142,10 @@ workflows:
                 - main
                 - /^release-v\d+$/
 
+  create-release-branch:
+    jobs:
       - approve-create-release-branch:
           type: approval
-          requires: [test, test-arm64]
           filters:
             branches:
               ignore:
@@ -147,14 +157,5 @@ workflows:
           filters:
             branches:
               ignore:
-                - main
-                - /^release-v\d+$/
-
-      - publish-package:
-          context: [sdlc, codeartifact-dev]
-          requires: [test, test-arm64]
-          filters:
-            branches:
-              only:
                 - main
                 - /^release-v\d+$/
