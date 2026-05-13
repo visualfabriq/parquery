@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 branch=$(git rev-parse --abbrev-ref HEAD)
 
-if [[ "$branch" =~ ^(main|master|release/) ]]; then
+if [[ "$branch" =~ ^(main|master|release/|release-v) ]]; then
     exit 0
 fi
 
