@@ -78,10 +78,36 @@ jobs:
           tool: twine
 
   publish-package:
+    parameters:
+      assert-release-version:
+        description: >
+          On release-vN.M branches, fail if pyproject.toml's MAJOR.MINOR does not
+          match the branch line. Guards the timestamp_version invariant so a stray
+          version bump merged into a hotfix branch cannot publish out-of-line
+          artifacts (e.g. a 2.1.x build from a release-v2.0 branch).
+        type: boolean
+        default: false
     executor:
       <<: *python_executor_small
     steps:
       - checkout
+      - when:
+          condition: << parameters.assert-release-version >>
+          steps:
+            - run:
+                name: Assert pyproject.toml version matches release branch
+                command: |
+                  branch_mm="${CIRCLE_BRANCH#release-v}"
+                  pkg_ver="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+                  pkg_mm="$(echo "$pkg_ver" | cut -d. -f1,2)"
+                  if [ "$pkg_mm" != "$branch_mm" ]; then
+                    echo "ERROR: pyproject.toml version $pkg_ver (MAJOR.MINOR=$pkg_mm) does not match"
+                    echo "release branch $CIRCLE_BRANCH (expected line $branch_mm)."
+                    echo "release-vN.M branches must keep pyproject.toml on their own MAJOR.MINOR so"
+                    echo "timestamp_version publishes N.M.TIMESTAMP. Revert the version bump or branch from main."
+                    exit 1
+                  fi
+                  echo "OK: pyproject.toml $pkg_ver is on the $branch_mm line."
       - codeartifact/init:
           tool: pip
       - export-uv-auth
@@ -138,6 +164,7 @@ workflows:
               only: /^release-v\d+\.\d+$/
       - publish-package:
           name: publish-package-release
+          assert-release-version: true
           context: [sdlc, codeartifact-dev]
           requires: [approve-release-publish]
           filters:
