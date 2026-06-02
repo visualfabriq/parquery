@@ -114,14 +114,35 @@ workflows:
           context: [sdlc, codeartifact-dev]
       - test-arm64:
           context: [sdlc, codeartifact-dev]
+
+      # Test runs on main + release-vN.M hotfix branches. release-v<MAJOR>.<MINOR>
+      # branches publish MAJOR.MINOR.TIMESTAMP from their own pyproject.toml. See
+      # docs/sdlc/sdlc-cicd-guide-backend.md §4b "CI workflow filters for hotfix
+      # branches" and "Governance for hotfix publishes".
+
+      # main auto-publishes — its gate is the reviewed PR merge
       - publish-package:
           context: [sdlc, codeartifact-dev]
           requires: [test, test-arm64]
           filters:
             branches:
-              only:
-                - main
-                - /^release-v\d+$/
+              only: main
+
+      # release-vN.M publishes only after a manual approval, on top of the
+      # required PR review (branch protection on release-v*)
+      - approve-release-publish:
+          type: approval
+          requires: [test, test-arm64]
+          filters:
+            branches:
+              only: /^release-v\d+\.\d+$/
+      - publish-package:
+          name: publish-package-release
+          context: [sdlc, codeartifact-dev]
+          requires: [approve-release-publish]
+          filters:
+            branches:
+              only: /^release-v\d+\.\d+$/
 
   # Feature branches: opt-in dev publish
   publish-dev:
@@ -132,7 +153,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+$/
+                - /^release-v\d+\.\d+$/
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
@@ -140,7 +161,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+$/
+                - /^release-v\d+\.\d+$/
 
   create-release-branch:
     jobs:
@@ -150,7 +171,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+$/
+                - /^release-v\d+\.\d+$/
       - create-release-branch:
           context: [sdlc, codeartifact-dev]
           requires: [approve-create-release-branch]
@@ -158,4 +179,4 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+$/
+                - /^release-v\d+\.\d+$/

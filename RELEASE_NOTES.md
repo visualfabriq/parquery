@@ -1,5 +1,14 @@
 # Release Notes for ParQuery
 
+## Release 2.1.0
+- Open a new MINOR line so `release-v2.0` can host hotfixes against the 2.0
+  series in isolation. No runtime changes. Pairs with the per-MINOR-line
+  hotfix CI introduced in FOUN-341: `release-vN.M` branches now match the
+  package filters (`/^release-v\d+\.\d+$/`) and publishes from those branches
+  run behind the manual `approve-release-publish` gate, while `main`
+  continues to auto-publish on merge. See
+  `docs/sdlc/sdlc-cicd-guide-backend.md` §4b.
+
 ## Release 2.0.7
 - Add configurable DuckDB memory limit via `DUCKDB_MEMORY_LIMIT` environment variable
 - Prevents DuckDB OOM on containers with limited memory (e.g. ECS tasks with multiple Gunicorn workers)
