@@ -1,5 +1,19 @@
 # Release Notes for ParQuery
 
+## Release 2.2.0
+- Harden the DuckDB read path against two failure modes seen on the shared EFS
+  data lake (FIN-4847):
+  - **Memory-pressure fault.** `call_duckdb` now maps `DUCKDB_THREADS`,
+    `DUCKDB_TEMP_DIR` and `DUCKDB_MAX_TEMP_DIR_SIZE` onto the connection config
+    (in addition to `DUCKDB_MEMORY_LIMIT`), so a large aggregation spills to disk
+    and completes, or raises a clean DuckDB OOM, instead of over-committing RAM.
+  - **Torn reads from concurrent writes.** Aggregations now read through a pinned
+    file descriptor (`/dev/fd/<fd>`) so a writer's atomic `os.replace` landing
+    mid-read cannot splice two file versions into a corrupt-but-valid result.
+    A reclaimed inode raises (retried) rather than returning garbage. Falls back
+    to reading by path where `/dev/fd` is unavailable.
+- All env vars remain optional; unset means DuckDB defaults (no behaviour change).
+
 ## Release 2.1.0
 - Open a new MINOR line so `release-v2.0` can host hotfixes against the 2.0
   series in isolation. No runtime changes. Pairs with the per-MINOR-line
