@@ -19,18 +19,39 @@ from parquery.tool import DataFilter
 logger = logging.getLogger(__name__)
 
 # DuckDB connection tuning, all optional and read from the environment so the
-# deploying service (not parquery) owns the values. Unset = DuckDB default.
+# deploying service (not parquery) owns the values. By default DuckDB caps
+# memory at ~80% of *detected* RAM (which in a container may be the host's RAM,
+# not the cgroup limit) and threads at the core count; these vars let the
+# deployer tighten those bounds and enable disk spill on a shared multi-worker
+# host.
 #   DUCKDB_MEMORY_LIMIT       per-connection working-memory cap, e.g. "2GB".
 #   DUCKDB_THREADS            per-connection thread count, e.g. "2". Bounding
 #                             this matters when several processes (e.g. gunicorn
 #                             workers) each open a connection on the same host.
 #   DUCKDB_TEMP_DIR           spill directory. Set together with a memory limit
 #                             so a large aggregation spills to disk and finishes
-#                             instead of over-committing RAM (kernel OOM kill);
-#                             unset, DuckDB spills to CWD/.tmp.
+#                             instead of erroring or over-committing RAM; unset,
+#                             DuckDB spills to CWD/.tmp.
 #   DUCKDB_MAX_TEMP_DIR_SIZE  cap on the spill directory, e.g. "10GB".
+
+
+def _int_env(name: str) -> int | None:
+    """Read an integer env var, failing fast with a named error on a bad value.
+
+    Validated at import so an operator typo surfaces once at startup rather than
+    as an opaque ``ValueError`` on every query.
+    """
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
 DUCKDB_MEMORY_LIMIT: str | None = os.environ.get("DUCKDB_MEMORY_LIMIT")
-DUCKDB_THREADS: str | None = os.environ.get("DUCKDB_THREADS")
+DUCKDB_THREADS: int | None = _int_env("DUCKDB_THREADS")
 DUCKDB_TEMP_DIR: str | None = os.environ.get("DUCKDB_TEMP_DIR")
 DUCKDB_MAX_TEMP_DIR_SIZE: str | None = os.environ.get("DUCKDB_MAX_TEMP_DIR_SIZE")
 
@@ -40,6 +61,10 @@ DUCKDB_MAX_TEMP_DIR_SIZE: str | None = os.environ.get("DUCKDB_MAX_TEMP_DIR_SIZE"
 # lands mid-read cannot splice two file versions into a corrupt-but-valid
 # result. Only available where ``/dev/fd`` exists (Linux, macOS).
 _CAN_PIN_FD: bool = os.path.isdir("/dev/fd")
+
+# One-time guard so the "torn-read protection disabled" warning below does not
+# spam the log on every query when ``/dev/fd`` is unavailable.
+_fd_fallback_warned: bool = False
 
 
 def aggregate_pq_duckdb(
@@ -121,10 +146,18 @@ def aggregate_pq_duckdb(
 
     # Execute against a pinned snapshot of the file (see _aggregate_pinned).
     # A transient OSError — e.g. an NFS/EFS stale handle after a concurrent
-    # atomic rename reclaimed the inode — is retried once with a fresh fd.
+    # atomic rename reclaimed the inode — is retried once with a fresh fd. The
+    # catch stays broad (EFS surfaces several errnos) but is logged so the retry
+    # is observable; a non-transient cause raises again on the second attempt.
     try:
         result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
-    except OSError:
+    except OSError as exc:
+        logger.warning(
+            "OSError reading %s (%s); retrying once with a fresh fd",
+            file_name,
+            exc,
+            exc_info=True,
+        )
         gc.collect()
         result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
 
@@ -150,9 +183,19 @@ def _aggregate_pinned(
     the backing inode is reclaimed (``ESTALE``) DuckDB raises rather than
     returning garbage, and ``aggregate_pq_duckdb`` retries with a fresh fd.
 
-    Where ``/dev/fd`` is unavailable the read falls back to the path directly.
+    Where ``/dev/fd`` is unavailable the read falls back to the path directly,
+    which loses torn-read protection — a one-time warning is logged so operators
+    can detect that the guarantee is degraded in their environment.
     """
     if not _CAN_PIN_FD:
+        global _fd_fallback_warned
+        if not _fd_fallback_warned:
+            logger.warning(
+                "/dev/fd unavailable; reading %s by path without inode pinning. "
+                "A concurrent atomic rename could yield a corrupt result.",
+                file_name,
+            )
+            _fd_fallback_warned = True
         sql = _build_sql_query(file_name, groupby_cols, measure_cols, data_filter, aggregate)
         if debug:
             logger.debug(f"DuckDB SQL:\n{sql}\n")
@@ -189,10 +232,12 @@ def call_duckdb(sql) -> Any:
     config: dict[str, Any] = {}
     if DUCKDB_MEMORY_LIMIT:
         config["memory_limit"] = DUCKDB_MEMORY_LIMIT
-    if DUCKDB_THREADS:
-        config["threads"] = int(DUCKDB_THREADS)
+    if DUCKDB_THREADS is not None:
+        config["threads"] = DUCKDB_THREADS  # validated to int at import
     if DUCKDB_TEMP_DIR:
-        # Created here so a misconfigured path is not a hard error on every query.
+        # DuckDB does not create temp_directory itself, so ensure it exists.
+        # exist_ok makes this a cheap stat after first use; a genuinely bad path
+        # (unwritable parent, or a file at this path) still raises here.
         os.makedirs(DUCKDB_TEMP_DIR, exist_ok=True)
         config["temp_directory"] = DUCKDB_TEMP_DIR
         if DUCKDB_MAX_TEMP_DIR_SIZE:

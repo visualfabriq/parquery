@@ -5,11 +5,12 @@ Two independent failure modes on the shared EFS data lake:
 * A concurrent writer ``os.replace``-ing a shard mid-read could splice two file
   versions into a corrupt-but-valid result. ``_aggregate_pinned`` reads through
   ``/dev/fd/<fd>`` so the whole read sees one consistent inode snapshot.
-* DuckDB runs unbounded unless told otherwise. ``call_duckdb`` maps the
-  ``DUCKDB_*`` env vars onto the connection config so memory/threads/spill are
-  bounded by the deploying service.
+* By default DuckDB sizes memory/threads to the host, not the container.
+  ``call_duckdb`` maps the ``DUCKDB_*`` env vars onto the connection config so
+  the deploying service can tighten memory/threads and enable disk spill.
 """
 
+import logging
 import os
 
 import pyarrow as pa
@@ -28,6 +29,11 @@ def _write(path, dates):
         pa.table({"a-31": dates, "g": [1] * len(dates), "m1": [1.0] * len(dates)}),
         path,
     )
+
+
+def _result_map(res):
+    """Map groupby key -> summed measure, so assertions check values, not just keys."""
+    return dict(zip(res.column("a-31").to_pylist(), res.column("m1").to_pylist(), strict=True))
 
 
 def _swap_then_read(real, target, newfile):
@@ -53,7 +59,8 @@ def test_pinned_read_survives_concurrent_replace(tmp_path, monkeypatch):
 
     res = aggregate_pq(target, ["a-31"], [["m1", "sum"]], engine="duckdb", as_df=False, aggregate=True)
 
-    assert sorted(res.column("a-31").to_pylist()) == [20251201, 20251202]
+    # Both keys AND the summed measure reflect the pre-rename snapshot.
+    assert _result_map(res) == {20251201: 1.0, 20251202: 1.0}
 
 
 def test_without_pin_concurrent_replace_is_visible(tmp_path, monkeypatch):
@@ -69,7 +76,74 @@ def test_without_pin_concurrent_replace_is_visible(tmp_path, monkeypatch):
 
     res = aggregate_pq(target, ["a-31"], [["m1", "sum"]], engine="duckdb", as_df=False, aggregate=True)
 
-    assert sorted(res.column("a-31").to_pylist()) == [99999999]
+    assert _result_map(res) == {99999999: 1.0}
+
+
+def test_fallback_without_dev_fd_returns_correct_result(tmp_path, monkeypatch, caplog):
+    # The /dev/fd-absent branch must still return a correct result on the normal
+    # (no concurrent rename) path, and must warn that protection is degraded.
+    target = str(tmp_path / "shard.parquet")
+    _write(target, [20251201, 20251202])
+
+    monkeypatch.setattr(adb, "_CAN_PIN_FD", False)
+    monkeypatch.setattr(adb, "_fd_fallback_warned", False)
+
+    with caplog.at_level(logging.WARNING):
+        res = aggregate_pq(target, ["a-31"], [["m1", "sum"]], engine="duckdb", as_df=False, aggregate=True)
+
+    assert _result_map(res) == {20251201: 1.0, 20251202: 1.0}
+    assert any("without inode pinning" in r.message for r in caplog.records)
+
+
+@pytest.mark.skipif(not adb._CAN_PIN_FD, reason="/dev/fd not available")
+def test_oserror_retried_once_with_fresh_fd(tmp_path, monkeypatch):
+    target = str(tmp_path / "shard.parquet")
+    _write(target, [20251201, 20251202])
+
+    real_call = adb.call_duckdb
+    calls = {"n": 0}
+
+    def flaky(sql):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("transient stale handle")
+        return real_call(sql)
+
+    opened, closed = [], []
+    real_open, real_close = os.open, os.close
+
+    def counting_open(path, flags, *args, **kwargs):
+        fd = real_open(path, flags, *args, **kwargs)
+        opened.append(fd)
+        return fd
+
+    def counting_close(fd):
+        closed.append(fd)
+        return real_close(fd)
+
+    monkeypatch.setattr(adb, "call_duckdb", flaky)
+    monkeypatch.setattr(os, "open", counting_open)
+    monkeypatch.setattr(os, "close", counting_close)
+
+    res = aggregate_pq(target, ["a-31"], [["m1", "sum"]], engine="duckdb", as_df=False, aggregate=True)
+
+    assert calls["n"] == 2  # failed once, retried once
+    assert len(opened) == 2  # a fresh fd opened per attempt
+    assert opened == closed  # every fd closed, including the failing attempt (no leak)
+    assert _result_map(res) == {20251201: 1.0, 20251202: 1.0}
+
+
+def test_oserror_second_failure_propagates(tmp_path, monkeypatch):
+    target = str(tmp_path / "shard.parquet")
+    _write(target, [20251201])
+
+    def always_raise(sql):
+        raise OSError("persistent")
+
+    monkeypatch.setattr(adb, "call_duckdb", always_raise)
+
+    with pytest.raises(OSError, match="persistent"):
+        aggregate_pq(target, ["a-31"], [["m1", "sum"]], engine="duckdb", as_df=False, aggregate=True)
 
 
 def test_connection_config_from_env(tmp_path, monkeypatch):
@@ -84,7 +158,7 @@ def test_connection_config_from_env(tmp_path, monkeypatch):
 
     spill = str(tmp_path / "spill")
     monkeypatch.setattr(adb, "DUCKDB_MEMORY_LIMIT", "512MB")
-    monkeypatch.setattr(adb, "DUCKDB_THREADS", "2")
+    monkeypatch.setattr(adb, "DUCKDB_THREADS", 2)  # int, coerced at import
     monkeypatch.setattr(adb, "DUCKDB_TEMP_DIR", spill)
     monkeypatch.setattr(adb, "DUCKDB_MAX_TEMP_DIR_SIZE", "4GB")
     monkeypatch.setattr(duckdb, "connect", fake_connect)
@@ -93,10 +167,33 @@ def test_connection_config_from_env(tmp_path, monkeypatch):
 
     cfg = captured["config"]
     assert cfg["memory_limit"] == "512MB"
-    assert cfg["threads"] == 2  # coerced to int
+    assert cfg["threads"] == 2
     assert cfg["temp_directory"] == spill
     assert cfg["max_temp_directory_size"] == "4GB"
     assert os.path.isdir(spill)  # created if missing
+
+
+def test_connection_config_threads_only(monkeypatch):
+    # Partial config: max-temp-size without a temp dir is dropped, and no spill
+    # directory is created when only threads is set.
+    import duckdb
+
+    captured = {}
+    real_connect = duckdb.connect
+
+    def fake_connect(database, config=None):
+        captured["config"] = dict(config or {})
+        return real_connect(database, config=config or {})
+
+    monkeypatch.setattr(adb, "DUCKDB_MEMORY_LIMIT", None)
+    monkeypatch.setattr(adb, "DUCKDB_THREADS", 2)
+    monkeypatch.setattr(adb, "DUCKDB_TEMP_DIR", None)
+    monkeypatch.setattr(adb, "DUCKDB_MAX_TEMP_DIR_SIZE", "4GB")
+    monkeypatch.setattr(duckdb, "connect", fake_connect)
+
+    adb.call_duckdb("SELECT 1")
+
+    assert captured["config"] == {"threads": 2}
 
 
 def test_connection_config_empty_when_unset(monkeypatch):
@@ -116,3 +213,14 @@ def test_connection_config_empty_when_unset(monkeypatch):
     adb.call_duckdb("SELECT 1")
 
     assert captured["config"] == {}
+
+
+def test_int_env_rejects_non_integer(monkeypatch):
+    monkeypatch.setenv("DUCKDB_THREADS", "two")
+    with pytest.raises(ValueError, match="DUCKDB_THREADS must be an integer"):
+        adb._int_env("DUCKDB_THREADS")
+
+
+def test_int_env_none_when_unset(monkeypatch):
+    monkeypatch.delenv("DUCKDB_THREADS", raising=False)
+    assert adb._int_env("DUCKDB_THREADS") is None
