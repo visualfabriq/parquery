@@ -18,7 +18,28 @@ from parquery.tool import DataFilter
 
 logger = logging.getLogger(__name__)
 
+# DuckDB connection tuning, all optional and read from the environment so the
+# deploying service (not parquery) owns the values. Unset = DuckDB default.
+#   DUCKDB_MEMORY_LIMIT       per-connection working-memory cap, e.g. "2GB".
+#   DUCKDB_THREADS            per-connection thread count, e.g. "2". Bounding
+#                             this matters when several processes (e.g. gunicorn
+#                             workers) each open a connection on the same host.
+#   DUCKDB_TEMP_DIR           spill directory. Set together with a memory limit
+#                             so a large aggregation spills to disk and finishes
+#                             instead of over-committing RAM (kernel OOM kill);
+#                             unset, DuckDB spills to CWD/.tmp.
+#   DUCKDB_MAX_TEMP_DIR_SIZE  cap on the spill directory, e.g. "10GB".
 DUCKDB_MEMORY_LIMIT: str | None = os.environ.get("DUCKDB_MEMORY_LIMIT")
+DUCKDB_THREADS: str | None = os.environ.get("DUCKDB_THREADS")
+DUCKDB_TEMP_DIR: str | None = os.environ.get("DUCKDB_TEMP_DIR")
+DUCKDB_MAX_TEMP_DIR_SIZE: str | None = os.environ.get("DUCKDB_MAX_TEMP_DIR_SIZE")
+
+# A reader and a writer share each parquet shard on EFS; the writer publishes
+# updates with an atomic ``os.replace``. Pointing DuckDB at ``/dev/fd/<fd>`` of
+# an already-open descriptor pins the inode for the whole read, so a rename that
+# lands mid-read cannot splice two file versions into a corrupt-but-valid
+# result. Only available where ``/dev/fd`` exists (Linux, macOS).
+_CAN_PIN_FD: bool = os.path.isdir("/dev/fd")
 
 
 def aggregate_pq_duckdb(
@@ -98,26 +119,53 @@ def aggregate_pq_duckdb(
 
     data_filter = data_filter or []
 
-    # Build SQL query
-    sql = _build_sql_query(
-        file_name,
-        groupby_cols,
-        measure_cols,
-        data_filter,
-        aggregate,
-    )
-
-    if debug:
-        logger.debug(f"DuckDB SQL:\n{sql}\n")
-
-    # Execute query with DuckDB
+    # Execute against a pinned snapshot of the file (see _aggregate_pinned).
+    # A transient OSError — e.g. an NFS/EFS stale handle after a concurrent
+    # atomic rename reclaimed the inode — is retried once with a fresh fd.
     try:
-        result_arrow = call_duckdb(sql)
+        result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
     except OSError:
         gc.collect()
-        result_arrow = call_duckdb(sql)
+        result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
 
     return result_arrow
+
+
+def _aggregate_pinned(
+    file_name: str,
+    groupby_cols: list[str],
+    measure_cols: list[list[str]],
+    data_filter: DataFilter,
+    aggregate: bool,
+    debug: bool,
+) -> pa.Table:
+    """Aggregate ``file_name`` against a consistent snapshot of its bytes.
+
+    The writer publishes shard updates with an atomic ``os.replace`` on EFS. If
+    that rename lands while DuckDB is mid-read, reading by path can combine the
+    footer of one file version with the data pages of another and return a
+    structurally valid but corrupt result (wrong values, no error). We open the
+    file once and point DuckDB at ``/dev/fd/<fd>``, which re-resolves to that
+    exact inode for the whole read, so any concurrent rename is invisible. If
+    the backing inode is reclaimed (``ESTALE``) DuckDB raises rather than
+    returning garbage, and ``aggregate_pq_duckdb`` retries with a fresh fd.
+
+    Where ``/dev/fd`` is unavailable the read falls back to the path directly.
+    """
+    if not _CAN_PIN_FD:
+        sql = _build_sql_query(file_name, groupby_cols, measure_cols, data_filter, aggregate)
+        if debug:
+            logger.debug(f"DuckDB SQL:\n{sql}\n")
+        return call_duckdb(sql)
+
+    fd = os.open(file_name, os.O_RDONLY)
+    try:
+        sql = _build_sql_query(f"/dev/fd/{fd}", groupby_cols, measure_cols, data_filter, aggregate)
+        if debug:
+            logger.debug(f"DuckDB SQL:\n{sql}\n")
+        return call_duckdb(sql)
+    finally:
+        os.close(fd)
 
 
 def call_duckdb(sql) -> Any:
@@ -138,9 +186,17 @@ def call_duckdb(sql) -> Any:
         - Connection is automatically closed after query execution.
         - Results are streamed via RecordBatchReader and converted to Table.
     """
-    config = {}
+    config: dict[str, Any] = {}
     if DUCKDB_MEMORY_LIMIT:
         config["memory_limit"] = DUCKDB_MEMORY_LIMIT
+    if DUCKDB_THREADS:
+        config["threads"] = int(DUCKDB_THREADS)
+    if DUCKDB_TEMP_DIR:
+        # Created here so a misconfigured path is not a hard error on every query.
+        os.makedirs(DUCKDB_TEMP_DIR, exist_ok=True)
+        config["temp_directory"] = DUCKDB_TEMP_DIR
+        if DUCKDB_MAX_TEMP_DIR_SIZE:
+            config["max_temp_directory_size"] = DUCKDB_MAX_TEMP_DIR_SIZE
     conn = duckdb.connect(":memory:", config=config)
     # arrow() returns a RecordBatchReader, convert to Table
     reader = conn.execute(sql).arrow()
