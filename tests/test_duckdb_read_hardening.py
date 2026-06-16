@@ -224,3 +224,25 @@ def test_int_env_rejects_non_integer(monkeypatch):
 def test_int_env_none_when_unset(monkeypatch):
     monkeypatch.delenv("DUCKDB_THREADS", raising=False)
     assert adb._int_env("DUCKDB_THREADS") is None
+
+
+def test_call_duckdb_closes_connection_on_failure(monkeypatch):
+    # The connection's memory must be released even when the query raises, so a
+    # subsequent retry (and its gc.collect) is not competing with a live conn.
+    import duckdb
+
+    closed = {"n": 0}
+
+    class FailingConn:
+        def execute(self, sql):
+            raise RuntimeError("boom")
+
+        def close(self):
+            closed["n"] += 1
+
+    monkeypatch.setattr(duckdb, "connect", lambda *args, **kwargs: FailingConn())
+
+    with pytest.raises(RuntimeError, match="boom"):
+        adb.call_duckdb("SELECT 1")
+
+    assert closed["n"] == 1

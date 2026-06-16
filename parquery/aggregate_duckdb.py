@@ -96,10 +96,6 @@ def aggregate_pq_duckdb(
             Example: [['f0', 'in', [1, 2, 3]], ['f1', '>', 100]]
         aggregate: If True, performs groupby aggregation. If False, returns filtered
             rows without aggregation.
-        standard_missing_id: Default value for missing dimension columns (default: -1).
-            Missing measure columns always get 0.0.
-        handle_missing_file: If True, returns empty result when file doesn't exist.
-            If False, raises OSError for missing files.
         debug: If True, prints SQL queries during processing.
 
     Returns:
@@ -107,8 +103,9 @@ def aggregate_pq_duckdb(
 
     Raises:
         ImportError: If DuckDB is not installed.
-        OSError: If file doesn't exist and handle_missing_file=False, or if file
-            cannot be read.
+        OSError: If the file cannot be opened or read (e.g. a stale handle on
+            EFS). Missing-file handling lives in the ``aggregate_pq`` wrapper,
+            which checks existence before this function is called.
         FilterValueError: If filter values are invalid.
         NotImplementedError: If an unsupported filter operator is used.
 
@@ -158,6 +155,9 @@ def aggregate_pq_duckdb(
             exc,
             exc_info=True,
         )
+        # Reclaim memory before retrying: call_duckdb closes its connection on
+        # the failure path, so a collection here frees the dropped DuckDB
+        # objects (helps when the OSError stems from memory pressure).
         gc.collect()
         result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
 
@@ -226,7 +226,8 @@ def call_duckdb(sql) -> Any:
 
     Notes:
         - Uses in-memory database (:memory:) for temporary processing.
-        - Connection is automatically closed after query execution.
+        - Connection is closed on every path (success or failure) so its memory
+          is released promptly.
         - Results are streamed via RecordBatchReader and converted to Table.
     """
     config: dict[str, Any] = {}
@@ -243,11 +244,14 @@ def call_duckdb(sql) -> Any:
         if DUCKDB_MAX_TEMP_DIR_SIZE:
             config["max_temp_directory_size"] = DUCKDB_MAX_TEMP_DIR_SIZE
     conn = duckdb.connect(":memory:", config=config)
-    # arrow() returns a RecordBatchReader, convert to Table
-    reader = conn.execute(sql).arrow()
-    result_arrow = reader.read_all()
-    conn.close()
-    return result_arrow
+    try:
+        # arrow() returns a RecordBatchReader, convert to Table
+        reader = conn.execute(sql).arrow()
+        return reader.read_all()
+    finally:
+        # Close on every path so the connection's memory is released
+        # immediately on failure, not left pinned until garbage collection.
+        conn.close()
 
 
 def _build_sql_query(
