@@ -1,6 +1,6 @@
 [project]
 name = "parquery"
-version = "2.2.0"
+version = "2.2.1"
 description = "A query and aggregation framework for Parquet"
 readme = "README.md"
 requires-python = ">=3.11"
