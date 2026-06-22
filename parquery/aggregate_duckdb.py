@@ -3,6 +3,8 @@ from __future__ import annotations
 import gc
 import logging
 import os
+import shutil
+import uuid
 from typing import Any
 
 try:
@@ -235,12 +237,21 @@ def call_duckdb(sql) -> Any:
         config["memory_limit"] = DUCKDB_MEMORY_LIMIT
     if DUCKDB_THREADS is not None:
         config["threads"] = DUCKDB_THREADS  # validated to int at import
+    conn_temp_dir: str | None = None
     if DUCKDB_TEMP_DIR:
+        # Every :memory: connection spills to ``duckdb_temp_storage_DEFAULT-N.tmp``;
+        # with a shared temp_directory the concurrent reader processes (one DuckDB
+        # connection per gunicorn worker) collide on the same path and clobber each
+        # other's spill blocks. That surfaces either as an IO error ("Could not read
+        # enough bytes from file") or, worse, a silently wrong aggregation when a
+        # clobbered block happens to read back as valid. Give each connection its own
+        # subdirectory so spills can never collide. See FIN-4849.
+        conn_temp_dir = os.path.join(DUCKDB_TEMP_DIR, f"{os.getpid()}-{uuid.uuid4().hex}")
         # DuckDB does not create temp_directory itself, so ensure it exists.
         # exist_ok makes this a cheap stat after first use; a genuinely bad path
         # (unwritable parent, or a file at this path) still raises here.
-        os.makedirs(DUCKDB_TEMP_DIR, exist_ok=True)
-        config["temp_directory"] = DUCKDB_TEMP_DIR
+        os.makedirs(conn_temp_dir, exist_ok=True)
+        config["temp_directory"] = conn_temp_dir
         if DUCKDB_MAX_TEMP_DIR_SIZE:
             config["max_temp_directory_size"] = DUCKDB_MAX_TEMP_DIR_SIZE
     conn = duckdb.connect(":memory:", config=config)
@@ -252,6 +263,11 @@ def call_duckdb(sql) -> Any:
         # Close on every path so the connection's memory is released
         # immediately on failure, not left pinned until garbage collection.
         conn.close()
+        # Remove this connection's private spill directory. DuckDB deletes its own
+        # .tmp files on close, but the directory itself lingers; clean it up so a
+        # long-lived worker does not accumulate one empty dir per query.
+        if conn_temp_dir is not None:
+            shutil.rmtree(conn_temp_dir, ignore_errors=True)
 
 
 def _build_sql_query(
