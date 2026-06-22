@@ -168,9 +168,45 @@ def test_connection_config_from_env(tmp_path, monkeypatch):
     cfg = captured["config"]
     assert cfg["memory_limit"] == "512MB"
     assert cfg["threads"] == 2
-    assert cfg["temp_directory"] == spill
+    # temp_directory is a per-connection subdir under the configured root, not the
+    # root itself, so concurrent connections cannot collide on one spill file.
+    assert cfg["temp_directory"] != spill
+    assert os.path.dirname(cfg["temp_directory"]) == spill
     assert cfg["max_temp_directory_size"] == "4GB"
-    assert os.path.isdir(spill)  # created if missing
+    assert os.path.isdir(spill)  # root created if missing
+
+
+def test_spill_dir_unique_per_connection_and_cleaned_up(tmp_path, monkeypatch):
+    # Without isolation every :memory: connection spills to the same
+    # ``duckdb_temp_storage_DEFAULT-0.tmp`` under a shared temp_directory; under
+    # concurrency those paths collide and clobber each other, yielding IO errors
+    # ("Could not read enough bytes") or silently wrong aggregations. Each
+    # connection must get its own spill subdir, removed once the query finishes.
+    import duckdb
+
+    spill = str(tmp_path / "spill")
+    seen = []
+    real_connect = duckdb.connect
+
+    def capturing_connect(database, config=None):
+        temp_dir = (config or {}).get("temp_directory")
+        assert temp_dir is not None
+        assert os.path.isdir(temp_dir)  # created before connect
+        assert os.path.dirname(temp_dir) == spill
+        seen.append(temp_dir)
+        return real_connect(database, config=config or {})
+
+    monkeypatch.setattr(adb, "DUCKDB_TEMP_DIR", spill)
+    monkeypatch.setattr(duckdb, "connect", capturing_connect)
+
+    adb.call_duckdb("SELECT 1")
+    adb.call_duckdb("SELECT 1")
+
+    assert len(seen) == 2
+    assert seen[0] != seen[1]  # distinct spill paths -> no collision
+    assert all(d.startswith(os.path.join(spill, f"{os.getpid()}-")) for d in seen)
+    assert not any(os.path.exists(d) for d in seen)  # cleaned up after each query
+    assert os.listdir(spill) == []  # root retained, no leaked subdirs
 
 
 def test_connection_config_threads_only(monkeypatch):
