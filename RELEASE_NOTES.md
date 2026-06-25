@@ -22,6 +22,10 @@
   run behind the manual `approve-release-publish` gate, while `main`
   continues to auto-publish on merge. See
   `docs/sdlc/sdlc-cicd-guide-backend.md` §4b.
+- `release-vN.M` branches must keep `pyproject.toml` on their own
+  `MAJOR.MINOR` so `timestamp_version` publishes `N.M.TIMESTAMP`. CI enforces
+  this — the `publish-package-release` job fails if the version line drifts
+  from the branch.
 
 ## Release 2.0.7
 - Add configurable DuckDB memory limit via `DUCKDB_MEMORY_LIMIT` environment variable
