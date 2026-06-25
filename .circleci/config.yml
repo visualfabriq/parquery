@@ -169,14 +169,12 @@ workflows:
           type: approval
           filters:
             branches:
-              ignore:
+              only:
                 - main
-                - /^release-v\d+\.\d+$/
       - create-release-branch:
           context: [sdlc, codeartifact-dev]
           requires: [approve-create-release-branch]
           filters:
             branches:
-              ignore:
+              only:
                 - main
-                - /^release-v\d+\.\d+$/
