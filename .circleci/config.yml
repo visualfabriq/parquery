@@ -135,14 +135,14 @@ workflows:
           requires: [test, test-arm64]
           filters:
             branches:
-              only: /^release-v\d+\.\d+$/
+              only: /^release-v\d+$/
       - publish-package:
           name: publish-package-release
           context: [sdlc, codeartifact-dev]
           requires: [approve-release-publish]
           filters:
             branches:
-              only: /^release-v\d+\.\d+$/
+              only: /^release-v\d+$/
 
   # Feature branches: opt-in dev publish
   publish-dev:
@@ -153,7 +153,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+\.\d+$/
+                - /^release-v\d+$/
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
@@ -161,7 +161,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+\.\d+$/
+                - /^release-v\d+$/
 
   create-release-branch:
     jobs:
@@ -171,7 +171,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+\.\d+$/
+                - /^release-v\d+$/
       - create-release-branch:
           context: [sdlc, codeartifact-dev]
           requires: [approve-create-release-branch]
@@ -179,4 +179,4 @@ workflows:
             branches:
               ignore:
                 - main
-                - /^release-v\d+\.\d+$/
+                - /^release-v\d+$/
