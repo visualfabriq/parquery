@@ -99,16 +99,8 @@ jobs:
           version: $RELEASE_VERSION
           release-assets: "dist/*.tar.gz dist/*.whl"
 
-  create-release-branch:
-    executor:
-      <<: *python_executor_small
-    steps:
-      - checkout
-      - sdlc/create-release-branch:
-          release-type: python-package
-
 workflows:
-  test:
+  parquery:
     jobs:
       - test:
           context: [sdlc, codeartifact-dev]
@@ -144,9 +136,6 @@ workflows:
             branches:
               only: /^release-v\d+\.\d+$/
 
-  # Feature branches: opt-in dev publish
-  publish-dev:
-    jobs:
       - approve-publish-dev:
           type: approval
           filters:
@@ -157,24 +146,6 @@ workflows:
       - publish-dev:
           context: [sdlc, codeartifact-dev]
           requires: [approve-publish-dev]
-          filters:
-            branches:
-              ignore:
-                - main
-                - /^release-v\d+\.\d+$/
-
-  create-release-branch:
-    jobs:
-      - approve-create-release-branch:
-          type: approval
-          filters:
-            branches:
-              ignore:
-                - main
-                - /^release-v\d+\.\d+$/
-      - create-release-branch:
-          context: [sdlc, codeartifact-dev]
-          requires: [approve-create-release-branch]
           filters:
             branches:
               ignore:
