@@ -33,8 +33,19 @@ def test_pa_serialization_stream():
     assert pa.Table.from_batches(batches) == table
 
 
+def test_base64_serialization_with_buffer_output():
+    """Test base64 conversion after binary serialization returns a Buffer."""
+    table = pa.table({"value": list(range(100))})
+
+    binary_data = serialize_pa_table_bytes(table)
+    assert isinstance(binary_data, pa.Buffer)
+
+    encoded = serialize_pa_table_base64(table)
+    assert deserialize_pa_table_base64(encoded) == table
+
+
 def test_pa_serialization_base64():
-    """Test PyArrow table serialization to base64 string."""
+    """Test base64 serialization accepts the returned PyArrow buffer."""
     # Create data directly with PyArrow
     data = {"f0": list(range(100)), "f1": list(range(100))}
     data_table = pa.table(data)
