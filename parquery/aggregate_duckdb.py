@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import uuid
+from collections.abc import Iterator
 from typing import Any
 
 try:
@@ -133,7 +134,7 @@ def aggregate_pq_duckdb(
     Notes:
         - DuckDB uses streaming execution with ~2048 row batches
         - Memory footprint is much lower than loading entire files
-        - Requires duckdb>=1.0.0: pip install duckdb or uv pip install 'parquery[performance]'
+        - Requires duckdb>=1.5.5: pip install duckdb or uv pip install 'parquery[performance]'
     """
     if not HAS_DUCKDB:
         raise ImportError(
@@ -213,6 +214,61 @@ def _aggregate_pinned(
         os.close(fd)
 
 
+def _duckdb_connection() -> tuple[Any, str | None]:
+    """Create a configured DuckDB connection and private spill directory.
+
+    Each connection gets a unique spill directory because concurrent workers
+    must never reuse DuckDB's default temporary filenames (DFM-4799).
+    """
+    config: dict[str, Any] = {}
+    if DUCKDB_MEMORY_LIMIT:
+        config["memory_limit"] = DUCKDB_MEMORY_LIMIT
+    if DUCKDB_THREADS is not None:
+        config["threads"] = DUCKDB_THREADS
+    conn_temp_dir: str | None = None
+    if DUCKDB_TEMP_DIR:
+        conn_temp_dir = os.path.join(DUCKDB_TEMP_DIR, f"{os.getpid()}-{uuid.uuid4().hex}")
+        os.makedirs(conn_temp_dir, exist_ok=True)
+        config["temp_directory"] = conn_temp_dir
+        if DUCKDB_MAX_TEMP_DIR_SIZE:
+            config["max_temp_directory_size"] = DUCKDB_MAX_TEMP_DIR_SIZE
+    try:
+        return duckdb.connect(":memory:", config=config), conn_temp_dir
+    except Exception:
+        if conn_temp_dir is not None:
+            shutil.rmtree(conn_temp_dir, ignore_errors=True)
+        raise
+
+
+def stream_duckdb(sql: str, batch_size: int = 65_536, file_descriptor: int | None = None) -> Iterator[pa.RecordBatch]:
+    """Yield Arrow record batches while keeping the DuckDB query open.
+
+    Unlike ``call_duckdb``, this deliberately does not materialize a table.
+    The connection and any spill directory remain alive until the iterator is
+    exhausted or closed.
+    """
+    if not HAS_DUCKDB:
+        raise ImportError("duckdb is required for streaming aggregation")
+    conn = None
+    conn_temp_dir = None
+    try:
+        conn, conn_temp_dir = _duckdb_connection()
+        # Export the relation directly as an Arrow RecordBatchReader.  This is
+        # the current DuckDB API and avoids materializing the complete result.
+        reader = conn.sql(sql).to_arrow_reader(batch_size)
+        try:
+            yield from reader
+        finally:
+            reader.close()
+    finally:
+        if conn is not None:
+            conn.close()
+        if conn_temp_dir is not None:
+            shutil.rmtree(conn_temp_dir, ignore_errors=True)
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+
+
 def call_duckdb(sql) -> Any:
     """
     Execute SQL query using DuckDB and return PyArrow Table.
@@ -230,44 +286,25 @@ def call_duckdb(sql) -> Any:
         - Uses in-memory database (:memory:) for temporary processing.
         - Connection is closed on every path (success or failure) so its memory
           is released promptly.
-        - Results are streamed via RecordBatchReader and converted to Table.
+        - Results are materialized as a PyArrow Table.
     """
-    config: dict[str, Any] = {}
-    if DUCKDB_MEMORY_LIMIT:
-        config["memory_limit"] = DUCKDB_MEMORY_LIMIT
-    if DUCKDB_THREADS is not None:
-        config["threads"] = DUCKDB_THREADS  # validated to int at import
-    conn_temp_dir: str | None = None
-    if DUCKDB_TEMP_DIR:
-        # Every :memory: connection spills to ``duckdb_temp_storage_DEFAULT-N.tmp``;
-        # with a shared temp_directory the concurrent reader processes (one DuckDB
-        # connection per gunicorn worker) collide on the same path and clobber each
-        # other's spill blocks. That surfaces either as an IO error ("Could not read
-        # enough bytes from file") or, worse, a silently wrong aggregation when a
-        # clobbered block happens to read back as valid. Give each connection its own
-        # subdirectory so spills can never collide.
-        conn_temp_dir = os.path.join(DUCKDB_TEMP_DIR, f"{os.getpid()}-{uuid.uuid4().hex}")
-        # DuckDB does not create temp_directory itself, so ensure it exists.
-        # exist_ok makes this a cheap stat after first use; a genuinely bad path
-        # (unwritable parent, or a file at this path) still raises here.
-        os.makedirs(conn_temp_dir, exist_ok=True)
-        config["temp_directory"] = conn_temp_dir
-        if DUCKDB_MAX_TEMP_DIR_SIZE:
-            config["max_temp_directory_size"] = DUCKDB_MAX_TEMP_DIR_SIZE
-    conn = duckdb.connect(":memory:", config=config)
+    conn = None
+    conn_temp_dir = None
     try:
-        # arrow() returns a RecordBatchReader, convert to Table
-        reader = conn.execute(sql).arrow()
-        return reader.read_all()
+        conn, conn_temp_dir = _duckdb_connection()
+        # Explicitly materialize the normal API result; streaming callers use
+        # ``to_arrow_reader`` above.
+        return conn.sql(sql).to_arrow_table()
     finally:
-        # Close on every path so the connection's memory is released
-        # immediately on failure, not left pinned until garbage collection.
-        conn.close()
-        # Remove this connection's private spill directory. DuckDB deletes its own
-        # .tmp files on close, but the directory itself lingers; clean it up so a
-        # long-lived worker does not accumulate one empty dir per query.
+        if conn is not None:
+            conn.close()
         if conn_temp_dir is not None:
             shutil.rmtree(conn_temp_dir, ignore_errors=True)
+
+
+def _quote_identifier(identifier: str) -> str:
+    """Quote a DuckDB identifier, including identifiers containing quotes."""
+    return '"' + identifier.replace('"', '""') + '"'
 
 
 def _build_sql_query(
@@ -321,27 +358,27 @@ def _build_sql_query(
         # Aggregation with or without groupby
         select_parts = []
         for col in groupby_cols:
-            select_parts.append(f'"{col}"')
+            select_parts.append(_quote_identifier(col))
 
         for col, op, output_name in measure_cols:
             op_upper = op.lower()
             if op_upper in ["count_distinct", "sorted_count_distinct"]:
-                agg_expr = f'COUNT(DISTINCT "{col}")'
+                agg_expr = f"COUNT(DISTINCT {_quote_identifier(col)})"
             else:
                 sql_op = op_map.get(op_upper, op.upper())
-                agg_expr = f'{sql_op}("{col}")'
+                agg_expr = f"{sql_op}({_quote_identifier(col)})"
 
-            select_parts.append(f'{agg_expr} AS "{output_name}"')
+            select_parts.append(f"{agg_expr} AS {_quote_identifier(output_name)}")
 
         select_clause = ", ".join(select_parts)
     else:
         # No aggregation, just select all requested columns
         all_cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols])))
-        select_parts = [f'"{col}"' for col in all_cols]
+        select_parts = [_quote_identifier(col) for col in all_cols]
         select_clause = ", ".join(select_parts)
 
     # Build FROM clause
-    from_clause = f"read_parquet('{file_name}')"
+    from_clause = f"read_parquet({_sql_literal(file_name)})"
 
     # Build WHERE clause
     where_conditions = []
@@ -356,7 +393,7 @@ def _build_sql_query(
     # Build GROUP BY clause
     group_by_clause = ""
     if aggregate and groupby_cols:
-        group_by_clause = "GROUP BY " + ", ".join(f'"{col}"' for col in groupby_cols)
+        group_by_clause = "GROUP BY " + ", ".join(_quote_identifier(col) for col in groupby_cols)
 
     # Combine all parts
     query_parts = [f"SELECT {select_clause}", f"FROM {from_clause}"]
@@ -368,32 +405,41 @@ def _build_sql_query(
     return "\n".join(query_parts)
 
 
+def _sql_literal(value: Any) -> str:
+    """Render a filter value as a safe DuckDB SQL literal."""
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, str):
+        return "'" + value.replace("'", "''") + "'"
+    return str(value)
+
+
 def _build_filter_condition(col: str, operator: str, values: Any) -> str:
     """Build SQL filter condition from operator and values."""
     if operator == "in":
         if isinstance(values, (list, tuple)):
-            values_str = ", ".join(str(v) for v in values)
-            return f'"{col}" IN ({values_str})'
-        else:
-            return f'"{col}" = {values}'
+            values_str = ", ".join(_sql_literal(v) for v in values)
+            return f"{_quote_identifier(col)} IN ({values_str})"
+        return f"{_quote_identifier(col)} = {_sql_literal(values)}"
     elif operator in ["not in", "nin"]:
         if isinstance(values, (list, tuple)):
-            values_str = ", ".join(str(v) for v in values)
-            return f'"{col}" NOT IN ({values_str})'
-        else:
-            return f'"{col}" != {values}'
+            values_str = ", ".join(_sql_literal(v) for v in values)
+            return f"{_quote_identifier(col)} NOT IN ({values_str})"
+        return f"{_quote_identifier(col)} != {_sql_literal(values)}"
     elif operator in ["=", "=="]:
-        return f'"{col}" = {values}'
+        return f"{_quote_identifier(col)} = {_sql_literal(values)}"
     elif operator == "!=":
-        return f'"{col}" != {values}'
+        return f"{_quote_identifier(col)} != {_sql_literal(values)}"
     elif operator == ">":
-        return f'"{col}" > {values}'
+        return f"{_quote_identifier(col)} > {_sql_literal(values)}"
     elif operator == ">=":
-        return f'"{col}" >= {values}'
+        return f"{_quote_identifier(col)} >= {_sql_literal(values)}"
     elif operator == "<=":
-        return f'"{col}" <= {values}'
+        return f"{_quote_identifier(col)} <= {_sql_literal(values)}"
     elif operator == "<":
-        return f'"{col}" < {values}'
+        return f"{_quote_identifier(col)} < {_sql_literal(values)}"
     else:
         valid_ops = ["in", "not in", "nin", "=", "==", "!=", ">", ">=", "<=", "<"]
         raise NotImplementedError(

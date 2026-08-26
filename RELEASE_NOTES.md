@@ -1,5 +1,13 @@
 # Release Notes for ParQuery
 
+## Unreleased
+- DFM-5038: Add `aggregate_pq_stream()` for incremental DuckDB Arrow record-batch results.
+- Require DuckDB 1.5.5+ for the `to_arrow_reader()` and `to_arrow_table()` APIs.
+- Retain pinned-file/resource cleanup through reader exhaustion or cancellation.
+- **Breaking:** DuckDB string filter values are now emitted as SQL string literals.
+  Callers must pass raw values (for example, `"ok"`), not pre-quoted values
+  (for example, `"'ok'"`).
+
 ## Release 3.0.0
 - DFM-5035: Return serialized PyArrow IPC streams as `pyarrow.Buffer` objects
   to avoid an unnecessary copy. This is a breaking change for callers that
