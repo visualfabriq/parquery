@@ -1,5 +1,10 @@
 # Release Notes for ParQuery
 
+## Release 2.3.0
+- DFM-4056: Compress PyArrow IPC streams with Zstandard and enable threaded
+  stream serialization.
+- Keep Parquet output on Snappy compression for interoperability and speed.
+
 ## Release 2.2.0
 - Harden the DuckDB read path against two failure modes seen on the shared EFS
   data lake (FIN-4847):

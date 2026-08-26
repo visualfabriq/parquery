@@ -62,7 +62,7 @@ def df_to_parquet(
     debug: bool = False,
 ) -> None:
     """
-    Write a DataFrame or PyArrow Table to Parquet file with ZSTD compression.
+    Write a DataFrame or PyArrow Table to Parquet file with Snappy compression.
 
     Supports pandas DataFrames, Polars DataFrames, and PyArrow Tables. Each type
     is handled optimally:
@@ -70,7 +70,7 @@ def df_to_parquet(
     - Polars: Zero-copy conversion via Arrow (very efficient)
     - PyArrow: Direct write (fastest)
 
-    All files are written with ZSTD compression for optimal file sizes.
+    All files are written with Snappy compression for broad interoperability and speed.
 
     Args:
         df: Data to write. Can be:
@@ -127,10 +127,10 @@ def df_to_parquet(
         # For Polars DataFrames, convert to PyArrow and write directly
         # Polars is built on Arrow, so this is very efficient
         table = df.to_arrow()
-        pq.write_table(table, full_filename, compression="ZSTD")
+        pq.write_table(table, full_filename, compression="snappy")
     elif isinstance(df, pa.Table):
         # Write PyArrow table directly
-        pq.write_table(df, full_filename, compression="ZSTD")
+        pq.write_table(df, full_filename, compression="snappy")
     else:
         raise TypeError(
             f"df must be a pandas DataFrame, Polars DataFrame, or PyArrow Table, got {type(df)}. "
@@ -177,7 +177,7 @@ def _write_chunked_df(
         # create writer if we did not have one yet
         if writer is None:
             writer = pq.ParquetWriter(
-                full_filename, data_table.schema, compression="ZSTD"
+                full_filename, data_table.schema, compression="snappy"
             )
         # save result
         writer.write_table(data_table)
@@ -189,7 +189,7 @@ def _write_chunked_df(
         data_table = pa.Table.from_pandas(df, preserve_index=False)
         if writer is None:
             writer = pq.ParquetWriter(
-                full_filename, data_table.schema, compression="ZSTD"
+                full_filename, data_table.schema, compression="snappy"
             )
         writer.write_table(data_table)
 

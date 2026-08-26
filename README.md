@@ -195,7 +195,7 @@ df = pl.DataFrame({'col1': [1, 2, 3], 'col2': ['a', 'b', 'c']})
 df_to_parquet(df, 'output.parquet')  # efficient zero-copy conversion via Arrow
 ```
 
-All writes use ZSTD compression by default for optimal file sizes.
+Parquet writes use Snappy compression by default for broad interoperability and speed.
 
 
 Column Name Conversion
