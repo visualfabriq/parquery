@@ -127,10 +127,10 @@ def df_to_parquet(
         # For Polars DataFrames, convert to PyArrow and write directly
         # Polars is built on Arrow, so this is very efficient
         table = df.to_arrow()
-        pq.write_table(table, full_filename, compression="ZSTD")
+        pq.write_table(table, full_filename, compression="zstd")
     elif isinstance(df, pa.Table):
         # Write PyArrow table directly
-        pq.write_table(df, full_filename, compression="ZSTD")
+        pq.write_table(df, full_filename, compression="zstd")
     else:
         raise TypeError(
             f"df must be a pandas DataFrame, Polars DataFrame, or PyArrow Table, got {type(df)}. "
@@ -177,7 +177,7 @@ def _write_chunked_df(
         # create writer if we did not have one yet
         if writer is None:
             writer = pq.ParquetWriter(
-                full_filename, data_table.schema, compression="ZSTD"
+                full_filename, data_table.schema, compression="zstd"
             )
         # save result
         writer.write_table(data_table)
@@ -189,7 +189,7 @@ def _write_chunked_df(
         data_table = pa.Table.from_pandas(df, preserve_index=False)
         if writer is None:
             writer = pq.ParquetWriter(
-                full_filename, data_table.schema, compression="ZSTD"
+                full_filename, data_table.schema, compression="zstd"
             )
         writer.write_table(data_table)
 

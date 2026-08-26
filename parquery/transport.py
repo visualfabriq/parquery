@@ -20,7 +20,11 @@ def serialize_pa_table_bytes(pa_table: pa.Table) -> bytes:
         Serialized bytes in PyArrow IPC format
     """
     sink = pa.BufferOutputStream()
-    with pa.ipc.RecordBatchStreamWriter(sink, pa_table.schema) as writer:
+    # Arrow IPC supports zstd (and lz4), but not Snappy.
+    options = pa.ipc.IpcWriteOptions(compression="zstd", use_threads=True)
+    with pa.ipc.RecordBatchStreamWriter(
+        sink, pa_table.schema, options=options
+    ) as writer:
         writer.write(pa_table)
     return sink.getvalue().to_pybytes()  # type: ignore[no-any-return]
 
