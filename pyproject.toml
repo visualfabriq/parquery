@@ -35,13 +35,13 @@ dependencies = [
 Homepage = "https://github.com/visualfabriq/parquery"
 
 [project.optional-dependencies]
-performance = ["duckdb>=1.0.0"]
+performance = ["duckdb>=1.5.5"]
 dataframes = ["numpy", "pandas>=1.5.3", "polars>=0.19.0"]
 all = [
     "numpy",
     "pandas>=1.5.3",
     "polars>=0.19.0",
-    "duckdb>=1.0.0",
+    "duckdb>=1.5.5",
 ]
 
 [dependency-groups]
@@ -49,7 +49,7 @@ test = [
     "pytest",
     "pytest-cov",
     "coverage",
-    "duckdb>=1.0.0",
+    "duckdb>=1.5.5",
     "mypy",
 ]
 

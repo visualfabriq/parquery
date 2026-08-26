@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal
+from collections.abc import Iterator
+from itertools import chain
+from typing import Any
+from typing import Literal
 
 try:
     import pandas as pd
@@ -11,21 +14,28 @@ except ImportError:
 
 import pyarrow as pa
 
-from parquery.tool import (
-    DataFilter,
-    HAS_DUCKDB,
-    HAS_PANDAS,
-    _add_missing_columns_after_engine,
-    create_empty_result,
-    get_existing_columns,
-    get_result_columns,
-    has_missing_filter_columns,
-    normalize_measure_cols,
-)
+import parquery.aggregate_duckdb as aggregate_duckdb
+from parquery.aggregate_duckdb import _CAN_PIN_FD
+from parquery.aggregate_duckdb import _build_sql_query
 from parquery.aggregate_duckdb import aggregate_pq_duckdb
+from parquery.aggregate_duckdb import stream_duckdb
 from parquery.aggregate_pyarrow import aggregate_pq_pyarrow
+from parquery.tool import HAS_DUCKDB
+from parquery.tool import HAS_PANDAS
+from parquery.tool import DataFilter
+from parquery.tool import _add_missing_columns_after_engine
+from parquery.tool import create_empty_result
+from parquery.tool import get_existing_columns
+from parquery.tool import get_result_columns
+from parquery.tool import has_missing_filter_columns
+from parquery.tool import normalize_measure_cols
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_record_batch_reader(columns: list[str]) -> pa.RecordBatchReader:
+    schema = pa.schema([(column, pa.null()) for column in columns])
+    return pa.RecordBatchReader.from_batches(schema, [])
 
 
 def check_libraries(as_df, engine) -> Any:
@@ -67,6 +77,104 @@ def check_libraries(as_df, engine) -> Any:
         )
 
     return engine
+
+
+def aggregate_pq_stream(
+    file_name: str,
+    groupby_cols: list[str],
+    measure_cols: list[str] | list[list[str]],
+    data_filter: DataFilter | None = None,
+    aggregate: bool = True,
+    standard_missing_id: int = -1,
+    handle_missing_file: bool = True,
+    debug: bool = False,
+    engine: Literal["auto", "duckdb"] = "auto",
+    batch_size: int = 65_536,
+) -> pa.RecordBatchReader:
+    """Stream an aggregation as Arrow record batches.
+
+    This API keeps DuckDB's query and connection open while batches are
+    consumed, avoiding the final ``pa.Table`` allocation made by
+    :func:`aggregate_pq`. It currently requires DuckDB; a grouped query still
+    needs DuckDB's own aggregation state, but the result is not materialized
+    into one Python/Arrow table before it can be sent to a client.
+
+    The iterator owns the DuckDB connection. Exhaust it (or call ``close()``)
+    when abandoning a query so resources and temporary spill files are cleaned
+    up. ``batch_size`` is a requested Arrow batch size, not a row-count promise.
+    """
+    selected_engine = check_libraries(False, engine)
+    if selected_engine != "duckdb":
+        raise ValueError("aggregate_pq_stream requires the DuckDB engine")
+    data_filter = data_filter or []
+    normalized = normalize_measure_cols(measure_cols)
+    result_cols = (
+        groupby_cols + [spec[2] for spec in normalized if spec[2] not in groupby_cols]
+        if aggregate
+        else sorted(set(groupby_cols + [spec[2] for spec in normalized]))
+    )
+    input_cols = set(groupby_cols + [x[0] for x in normalized] + [x[0] for x in data_filter])
+
+    if not os.path.exists(file_name):
+        if handle_missing_file:
+            return _empty_record_batch_reader(result_cols)
+        raise OSError(f"File not found: {file_name}")
+
+    existing_cols = get_existing_columns(file_name, input_cols)
+    if not existing_cols or has_missing_filter_columns(data_filter, existing_cols, debug=debug):
+        return _empty_record_batch_reader(result_cols)
+
+    filtered_groupby_cols = [col for col in groupby_cols if col in existing_cols]
+    filtered_measure_cols = [[col, op, output] for col, op, output in normalized if col in existing_cols]
+
+    def batches() -> Iterator[pa.RecordBatch]:
+        file_descriptor = None
+        handed_to_stream = False
+        try:
+            query_file_name = file_name
+            if _CAN_PIN_FD:
+                file_descriptor = os.open(file_name, os.O_RDONLY)
+                query_file_name = f"/dev/fd/{file_descriptor}"
+            else:
+                if not aggregate_duckdb._fd_fallback_warned:
+                    logger.warning(
+                        "/dev/fd unavailable; reading %s by path without inode pinning. "
+                        "A concurrent atomic rename could yield a corrupt result.",
+                        file_name,
+                    )
+                    aggregate_duckdb._fd_fallback_warned = True
+            sql = _build_sql_query(
+                query_file_name,
+                filtered_groupby_cols,
+                filtered_measure_cols,
+                data_filter,
+                aggregate,
+            )
+            handed_to_stream = True
+            for batch in stream_duckdb(sql, batch_size=batch_size, file_descriptor=file_descriptor):
+                # The common case needs no conversion at all: DuckDB already
+                # emits the requested result columns in the requested order.
+                if batch.schema.names == result_cols:
+                    yield batch
+                    continue
+                table = _add_missing_columns_after_engine(
+                    pa.Table.from_batches([batch]),
+                    groupby_cols,
+                    normalized,
+                    standard_missing_id=standard_missing_id,
+                    debug=debug,
+                )
+                yield from table.select(result_cols).to_batches()
+        finally:
+            if file_descriptor is not None and not handed_to_stream:
+                os.close(file_descriptor)
+
+    batches_iterator = batches()
+    try:
+        first_batch = next(batches_iterator)
+    except StopIteration:
+        return _empty_record_batch_reader(result_cols)
+    return pa.RecordBatchReader.from_batches(first_batch.schema, chain([first_batch], batches_iterator))
 
 
 def aggregate_pq(
@@ -147,9 +255,7 @@ def aggregate_pq(
 
     # Get result columns for empty result case
     result_cols = get_result_columns(groupby_cols, measure_cols)
-    input_cols = set(
-        groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter]
-    )
+    input_cols = set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter])
 
     # Check if file exists (if not, return empty if handle_missing_file=True)
     if not os.path.exists(file_name):
@@ -176,9 +282,7 @@ def aggregate_pq(
     # Filter inputs to only existing columns
     # Engines should only work with columns that exist
     filtered_groupby_cols = [col for col in groupby_cols if col in existing_cols]
-    filtered_measure_cols = [
-        [col, op, output] for col, op, output in measure_cols if col in existing_cols
-    ]
+    filtered_measure_cols = [[col, op, output] for col, op, output in measure_cols if col in existing_cols]
 
     # Route to appropriate engine (engines always return PyArrow Tables)
     # Engines receive only existing columns
@@ -201,9 +305,7 @@ def aggregate_pq(
             debug=debug,
         )
     else:
-        raise ValueError(
-            f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'"
-        )
+        raise ValueError(f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'")
 
     # Add missing expected columns to the result with default values
     result = _add_missing_columns_after_engine(

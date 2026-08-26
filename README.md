@@ -103,6 +103,18 @@ pa_table = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=False)
 
 # Return results as pandas DataFrame (requires pandas)
 df = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=True)
+
+# Stream DuckDB results as Arrow record batches (requires DuckDB)
+from parquery import aggregate_pq_stream
+reader = aggregate_pq_stream(
+    'example.parquet', ['f0'], ['f2'], batch_size=65_536
+)
+try:
+    for batch in reader:
+        # Write each batch to your IPC or HTTP stream.
+        write_batch(batch)
+finally:
+    reader.close()
 ```
 
 ### Engine Selection
@@ -131,6 +143,18 @@ result = aggregate_pq('example.parquet', ['f0'], ['f2'], engine='pyarrow')
 ```
 
 **Note:** Both engines return identical results and support all the same operations. The engine parameter is primarily for performance tuning or debugging.
+
+### Streaming aggregation
+
+`aggregate_pq_stream()` uses DuckDB's `to_arrow_reader()` API and yields
+`pyarrow.RecordBatch` objects incrementally. It is intended for HTTP/IPC
+responses where the complete result should not be materialized as a Python
+`pa.Table`. It requires DuckDB 1.5.5 or newer and currently uses the DuckDB
+engine only. The query may still require substantial internal memory for
+high-cardinality `GROUP BY`, `ORDER BY`, joins, or other blocking operators.
+
+Always consume or close the returned iterator so its DuckDB connection,
+Arrow reader, file descriptor, and temporary spill directory are released.
 
 
 Serialization and De-Serialization

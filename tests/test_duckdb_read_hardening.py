@@ -270,7 +270,7 @@ def test_call_duckdb_closes_connection_on_failure(monkeypatch):
     closed = {"n": 0}
 
     class FailingConn:
-        def execute(self, sql):
+        def sql(self, sql):
             raise RuntimeError("boom")
 
         def close(self):
