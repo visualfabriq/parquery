@@ -137,16 +137,16 @@ Serialization and De-Serialization
 --------
 To serialize PyArrow tables for network transmission or storage, we have transport functions available:
 
-### Binary Serialization (Bytes)
+### Binary Serialization (PyArrow Buffer)
 
-Use for binary protocols, direct byte transmission, or maximum efficiency:
+Use for binary protocols, direct buffer transmission, or maximum efficiency. The function returns a `pyarrow.Buffer` directly, avoiding an extra copy:
 
 ```python
 from parquery import serialize_pa_table_bytes, deserialize_pa_table_bytes, aggregate_pq
 
-# Create a serialized buffer from an aggregation result
+# Create a serialized PyArrow buffer from an aggregation result
 pa_table = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=False)
-buf = serialize_pa_table_bytes(pa_table)
+buf = serialize_pa_table_bytes(pa_table)  # pyarrow.Buffer
 
 # Deserialize
 pa_table = deserialize_pa_table_bytes(buf)

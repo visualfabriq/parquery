@@ -5,19 +5,19 @@ import binascii
 import pyarrow as pa
 
 # ============================================================================
-# Binary (bytes) serialization
+# Binary (PyArrow buffer) serialization
 # ============================================================================
 
 
-def serialize_pa_table_bytes(pa_table: pa.Table) -> bytes:
+def serialize_pa_table_bytes(pa_table: pa.Table) -> pa.Buffer:
     """
-    Serialize a PyArrow Table to bytes using IPC format.
+    Serialize a PyArrow Table to a PyArrow buffer using IPC format.
 
     Args:
         pa_table: PyArrow Table to serialize
 
     Returns:
-        Serialized bytes in PyArrow IPC format
+        Serialized PyArrow buffer in IPC format
     """
     sink = pa.BufferOutputStream()
     # Arrow IPC supports zstd (and lz4), but not Snappy.
@@ -26,15 +26,16 @@ def serialize_pa_table_bytes(pa_table: pa.Table) -> bytes:
         sink, pa_table.schema, options=options
     ) as writer:
         writer.write(pa_table)
-    return sink.getvalue().to_pybytes()  # type: ignore[no-any-return]
+    # Return the Arrow buffer directly to avoid copying the serialized stream.
+    return sink.getvalue()
 
 
-def deserialize_pa_table_bytes(buf: bytes) -> pa.Table:
+def deserialize_pa_table_bytes(buf: bytes | pa.Buffer) -> pa.Table:
     """
     Deserialize bytes to a PyArrow Table using IPC format.
 
     Args:
-        buf: Serialized bytes in PyArrow IPC format
+        buf: Serialized bytes or PyArrow buffer in IPC format
 
     Returns:
         PyArrow Table
