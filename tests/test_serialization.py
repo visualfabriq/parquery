@@ -3,6 +3,7 @@ import pyarrow as pa
 from parquery.transport import (
     deserialize_pa_table_base64,
     deserialize_pa_table_bytes,
+    open_pa_table_stream,
     serialize_pa_table_base64,
     serialize_pa_table_bytes,
 )
@@ -19,6 +20,17 @@ def test_pa_serialization_bytes():
 
     data_table_2 = deserialize_pa_table_bytes(buf)
     assert data_table == data_table_2
+
+
+def test_pa_serialization_stream():
+    """Test consuming serialized data incrementally as record batches."""
+    table = pa.table({"value": list(range(100))})
+    buf = serialize_pa_table_bytes(table)
+
+    with open_pa_table_stream(buf) as reader:
+        batches = list(reader)
+
+    assert pa.Table.from_batches(batches) == table
 
 
 def test_pa_serialization_base64():

@@ -30,17 +30,33 @@ def serialize_pa_table_bytes(pa_table: pa.Table) -> pa.Buffer:
     return sink.getvalue()
 
 
-def deserialize_pa_table_bytes(buf: bytes | pa.Buffer) -> pa.Table:
+def open_pa_table_stream(
+    source: bytes | pa.Buffer | pa.NativeFile,
+) -> pa.RecordBatchReader:
+    """Open a serialized IPC stream without materializing the full table.
+
+    The returned reader should be closed by the caller (or used as a context
+    manager). Consume it batch by batch to keep peak memory bounded.
     """
-    Deserialize bytes to a PyArrow Table using IPC format.
+    return pa.ipc.open_stream(source)
+
+
+def deserialize_pa_table_bytes(
+    buf: bytes | pa.Buffer | pa.NativeFile,
+) -> pa.Table:
+    """
+    Deserialize an IPC stream to a fully materialized PyArrow Table.
+
+    Use :func:`open_pa_table_stream` when the input should be consumed in
+    batches instead.
 
     Args:
-        buf: Serialized bytes or PyArrow buffer in IPC format
+        buf: Serialized bytes, PyArrow buffer, or readable Arrow file
 
     Returns:
         PyArrow Table
     """
-    with pa.ipc.open_stream(buf) as reader:
+    with open_pa_table_stream(buf) as reader:
         return reader.read_all()
 
 

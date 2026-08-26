@@ -148,8 +148,11 @@ from parquery import serialize_pa_table_bytes, deserialize_pa_table_bytes, aggre
 pa_table = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=False)
 buf = serialize_pa_table_bytes(pa_table)  # pyarrow.Buffer
 
-# Deserialize
+# Deserialize the complete table
 pa_table = deserialize_pa_table_bytes(buf)
+
+# For bounded-memory batch processing, use open_pa_table_stream(buf)
+# and consume the returned RecordBatchReader incrementally.
 
 # Convert to pandas if needed
 df = pa_table.to_pandas()
