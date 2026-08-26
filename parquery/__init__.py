@@ -21,6 +21,7 @@ from parquery.tool import (
 from parquery.transport import (
     deserialize_pa_table_base64,
     deserialize_pa_table_bytes,
+    open_pa_table_stream,
     serialize_pa_table_base64,
     serialize_pa_table_bytes,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "DataFilter",
     "serialize_pa_table_bytes",
     "deserialize_pa_table_bytes",
+    "open_pa_table_stream",
     "serialize_pa_table_base64",
     "deserialize_pa_table_base64",
     "df_to_parquet",

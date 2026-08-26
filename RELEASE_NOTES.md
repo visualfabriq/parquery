@@ -1,5 +1,11 @@
 # Release Notes for ParQuery
 
+## Release 3.0.0
+- DFM-5035: Return serialized PyArrow IPC streams as `pyarrow.Buffer` objects
+  to avoid an unnecessary copy. This is a breaking change for callers that
+  expect `serialize_pa_table_bytes()` to return `bytes`.
+- Add `open_pa_table_stream()` for incremental, bounded-memory IPC reads.
+
 ## Release 2.3.0
 - DFM-4056: Compress PyArrow IPC streams with Zstandard and enable threaded
   stream serialization.

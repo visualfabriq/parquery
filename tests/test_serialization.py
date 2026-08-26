@@ -3,6 +3,7 @@ import pyarrow as pa
 from parquery.transport import (
     deserialize_pa_table_base64,
     deserialize_pa_table_bytes,
+    open_pa_table_stream,
     serialize_pa_table_base64,
     serialize_pa_table_bytes,
 )
@@ -15,14 +16,36 @@ def test_pa_serialization_bytes():
     data_table = pa.table(data)
 
     buf = serialize_pa_table_bytes(data_table)
-    assert isinstance(buf, bytes)
+    assert isinstance(buf, pa.Buffer)
 
     data_table_2 = deserialize_pa_table_bytes(buf)
     assert data_table == data_table_2
 
 
+def test_pa_serialization_stream():
+    """Test consuming serialized data incrementally as record batches."""
+    table = pa.table({"value": list(range(100))})
+    buf = serialize_pa_table_bytes(table)
+
+    with open_pa_table_stream(buf) as reader:
+        batches = list(reader)
+
+    assert pa.Table.from_batches(batches) == table
+
+
+def test_base64_serialization_with_buffer_output():
+    """Test base64 conversion after binary serialization returns a Buffer."""
+    table = pa.table({"value": list(range(100))})
+
+    binary_data = serialize_pa_table_bytes(table)
+    assert isinstance(binary_data, pa.Buffer)
+
+    encoded = serialize_pa_table_base64(table)
+    assert deserialize_pa_table_base64(encoded) == table
+
+
 def test_pa_serialization_base64():
-    """Test PyArrow table serialization to base64 string."""
+    """Test base64 serialization accepts the returned PyArrow buffer."""
     # Create data directly with PyArrow
     data = {"f0": list(range(100)), "f1": list(range(100))}
     data_table = pa.table(data)
@@ -55,9 +78,9 @@ def test_arrow_table_roundtrip_verification():
 
     # Test bytes serialization
     serialized_bytes = serialize_pa_table_bytes(original_table)
-    # Verify the serialized format is bytes (not pa.Buffer!)
-    assert isinstance(serialized_bytes, bytes), (
-        f"Expected bytes, got {type(serialized_bytes)}"
+    # Verify serialization returns the zero-copy Arrow buffer.
+    assert isinstance(serialized_bytes, pa.Buffer), (
+        f"Expected pa.Buffer, got {type(serialized_bytes)}"
     )
 
     deserialized_from_bytes = deserialize_pa_table_bytes(serialized_bytes)

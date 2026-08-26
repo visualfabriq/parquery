@@ -135,21 +135,34 @@ result = aggregate_pq('example.parquet', ['f0'], ['f2'], engine='pyarrow')
 
 Serialization and De-Serialization
 --------
-To serialize PyArrow tables for network transmission or storage, we have transport functions available:
+The sender and receiver use the same Arrow IPC stream format. The API makes the direction explicit:
 
-### Binary Serialization (Bytes)
+- **Send/write:** `serialize_pa_table_bytes(table)` writes a table and returns a compressed `pyarrow.Buffer`.
+- **Receive/read:** `open_pa_table_stream(source)` opens an incoming stream and returns a lazy `RecordBatchReader`.
+- **Receive/read all:** `deserialize_pa_table_bytes(source)` reads an incoming stream into a complete `pyarrow.Table`.
 
-Use for binary protocols, direct byte transmission, or maximum efficiency:
+All IPC streams written by this package use Zstandard compression. The reader functions transparently read both compressed and uncompressed IPC streams.
+
+### Sending: Binary Serialization (PyArrow Buffer)
+
+Use for binary protocols, direct buffer transmission, or maximum efficiency. The function returns a `pyarrow.Buffer` directly, avoiding an extra copy:
 
 ```python
 from parquery import serialize_pa_table_bytes, deserialize_pa_table_bytes, aggregate_pq
 
-# Create a serialized buffer from an aggregation result
+# Create a serialized PyArrow buffer from an aggregation result
 pa_table = aggregate_pq('example.parquet', ['f0'], ['f2'], as_df=False)
-buf = serialize_pa_table_bytes(pa_table)
+buf = serialize_pa_table_bytes(pa_table)  # pyarrow.Buffer
 
-# Deserialize
+# Receive and deserialize the complete table
 pa_table = deserialize_pa_table_bytes(buf)
+
+# Or receive incrementally for bounded-memory processing:
+from parquery import open_pa_table_stream
+
+with open_pa_table_stream(buf) as reader:
+    for batch in reader:
+        process(batch)
 
 # Convert to pandas if needed
 df = pa_table.to_pandas()
