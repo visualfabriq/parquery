@@ -90,6 +90,7 @@ def aggregate_pq_stream(
     debug: bool = False,
     engine: Literal["auto", "duckdb"] = "auto",
     batch_size: int = 65_536,
+    zero_filter: bool = True,
 ) -> pa.RecordBatchReader:
     """Stream an aggregation as Arrow record batches.
 
@@ -149,6 +150,7 @@ def aggregate_pq_stream(
                 filtered_measure_cols,
                 data_filter,
                 aggregate,
+                zero_filter,
             )
             handed_to_stream = True
             for batch in stream_duckdb(sql, batch_size=batch_size, file_descriptor=file_descriptor):
@@ -188,6 +190,7 @@ def aggregate_pq(
     handle_missing_file: bool = True,
     debug: bool = False,
     engine: Literal["auto", "duckdb", "pyarrow"] = "auto",
+    zero_filter: bool = True,
 ) -> pd.DataFrame | pa.Table:
     """
     Aggregate a Parquet file using DuckDB (preferred) or PyArrow.
@@ -294,6 +297,7 @@ def aggregate_pq(
             data_filter=data_filter,
             aggregate=aggregate,
             debug=debug,
+            zero_filter=zero_filter,
         )
     elif engine == "pyarrow":
         result = aggregate_pq_pyarrow(
@@ -303,6 +307,7 @@ def aggregate_pq(
             data_filter=data_filter,
             aggregate=aggregate,
             debug=debug,
+            zero_filter=zero_filter,
         )
     else:
         raise ValueError(f"Unknown engine: {engine}. Must be 'auto', 'duckdb', or 'pyarrow'")
