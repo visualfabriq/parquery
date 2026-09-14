@@ -14,7 +14,9 @@ def test_aggregate_pq_stream_matches_table(tmp_path):
 
     batches = list(aggregate_pq_stream(str(path), ["group"], [["value", "sum", "total"]], batch_size=1))
     streamed = pa.Table.from_batches(batches)
-    expected = aggregate_pq(str(path), ["group"], [["value", "sum", "total"]], as_df=False, engine="duckdb")
+    expected = aggregate_pq(
+        str(path), ["group"], [["value", "sum", "total"]], as_df=False, engine="duckdb", zero_filter=False
+    )
 
     assert isinstance(
         reader := aggregate_pq_stream(str(path), ["group"], [["value", "sum", "total"]]), pa.RecordBatchReader
@@ -65,7 +67,7 @@ def test_streaming_without_groupby_matches_normal_api(tmp_path):
     path = write_test_table(tmp_path, pa.table({"value": [1, 2, 3]}))
 
     streamed = pa.Table.from_batches(list(aggregate_pq_stream(str(path), [], [["value", "sum", "total"]])))
-    normal = aggregate_pq(str(path), [], [["value", "sum", "total"]], as_df=False, engine="duckdb")
+    normal = aggregate_pq(str(path), [], [["value", "sum", "total"]], as_df=False, engine="duckdb", zero_filter=False)
     assert streamed == normal
 
 
@@ -74,7 +76,9 @@ def test_streaming_raw_rows_matches_normal_api(tmp_path):
     path = write_test_table(tmp_path, pa.table({"zeta": ["a", "b"], "alpha": [1, 2]}))
 
     streamed = pa.Table.from_batches(list(aggregate_pq_stream(str(path), ["zeta"], ["alpha"], aggregate=False)))
-    normal = aggregate_pq(str(path), ["zeta"], ["alpha"], aggregate=False, as_df=False, engine="duckdb")
+    normal = aggregate_pq(
+        str(path), ["zeta"], ["alpha"], aggregate=False, as_df=False, engine="duckdb", zero_filter=False
+    )
     assert streamed.column_names == normal.column_names
     assert streamed.sort_by("zeta") == normal.sort_by("zeta")
 
