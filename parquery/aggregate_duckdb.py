@@ -77,6 +77,7 @@ def aggregate_pq_duckdb(
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
     debug: bool = False,
+    zero_filter: bool = True,
 ) -> pa.Table:
     """
     Aggregate a Parquet file using DuckDB with streaming execution.
@@ -150,7 +151,9 @@ def aggregate_pq_duckdb(
     # catch stays broad (EFS surfaces several errnos) but is logged so the retry
     # is observable; a non-transient cause raises again on the second attempt.
     try:
-        result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
+        result_arrow = _aggregate_pinned(
+            file_name, groupby_cols, measure_cols, data_filter, aggregate, debug, zero_filter
+        )
     except OSError as exc:
         logger.warning(
             "OSError reading %s (%s); retrying once with a fresh fd",
@@ -162,7 +165,9 @@ def aggregate_pq_duckdb(
         # the failure path, so a collection here frees the dropped DuckDB
         # objects (helps when the OSError stems from memory pressure).
         gc.collect()
-        result_arrow = _aggregate_pinned(file_name, groupby_cols, measure_cols, data_filter, aggregate, debug)
+        result_arrow = _aggregate_pinned(
+            file_name, groupby_cols, measure_cols, data_filter, aggregate, debug, zero_filter
+        )
 
     return result_arrow
 
@@ -174,6 +179,7 @@ def _aggregate_pinned(
     data_filter: DataFilter,
     aggregate: bool,
     debug: bool,
+    zero_filter: bool = True,
 ) -> pa.Table:
     """Aggregate ``file_name`` against a consistent snapshot of its bytes.
 
@@ -199,14 +205,14 @@ def _aggregate_pinned(
                 file_name,
             )
             _fd_fallback_warned = True
-        sql = _build_sql_query(file_name, groupby_cols, measure_cols, data_filter, aggregate)
+        sql = _build_sql_query(file_name, groupby_cols, measure_cols, data_filter, aggregate, zero_filter)
         if debug:
             logger.debug(f"DuckDB SQL:\n{sql}\n")
         return call_duckdb(sql)
 
     fd = os.open(file_name, os.O_RDONLY)
     try:
-        sql = _build_sql_query(f"/dev/fd/{fd}", groupby_cols, measure_cols, data_filter, aggregate)
+        sql = _build_sql_query(f"/dev/fd/{fd}", groupby_cols, measure_cols, data_filter, aggregate, zero_filter)
         if debug:
             logger.debug(f"DuckDB SQL:\n{sql}\n")
         return call_duckdb(sql)
@@ -313,6 +319,7 @@ def _build_sql_query(
     measure_cols: list[list[str]],
     data_filter: DataFilter,
     aggregate: bool,
+    zero_filter: bool = True,
 ) -> str:
     """
     Build DuckDB SQL query for Parquet aggregation.
@@ -397,6 +404,15 @@ def _build_sql_query(
 
     # Combine all parts
     query_parts = [f"SELECT {select_clause}", f"FROM {from_clause}"]
+    if zero_filter and aggregate and measure_cols and all(op.lower() == "sum" for _col, op, _output in measure_cols):
+        # Remove source rows that cannot contribute to a non-zero result before
+        # grouping. We intentionally do not add a post-aggregation HAVING clause:
+        # repeating every aggregate expression there is expensive for wide
+        # queries, while cancellation groups are uncommon.
+        non_zero_inputs = [f"{_quote_identifier(col)} != 0" for col, _op, _output in measure_cols]
+        where_conditions.append("(" + " OR ".join(non_zero_inputs) + ")")
+        where_clause = "WHERE " + " AND ".join(where_conditions)
+
     if where_clause:
         query_parts.append(where_clause)
     if group_by_clause:

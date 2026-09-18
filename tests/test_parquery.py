@@ -37,9 +37,7 @@ def assert_tables_equal(table1, table2, decimal=6):
         for i, (v1, v2) in enumerate(zip(col1, col2)):
             if isinstance(v1, float) and isinstance(v2, float):
                 if not math.isclose(v1, v2, rel_tol=10**-decimal, abs_tol=10**-decimal):
-                    raise AssertionError(
-                        f"Column '{col_name}' row {i}: {v1} != {v2} (tolerance={10**-decimal})"
-                    )
+                    raise AssertionError(f"Column '{col_name}' row {i}: {v1} != {v2} (tolerance={10**-decimal})")
             else:
                 assert v1 == v2, f"Column '{col_name}' row {i}: {v1} != {v2}"
 
@@ -50,9 +48,7 @@ def round_float_columns(table, decimal=6):
     for col_name in table.column_names:
         col = table[col_name]
         if pa.types.is_floating(col.type):
-            rounded = [
-                (round(v, decimal) if v is not None else None) for v in col.to_pylist()
-            ]
+            rounded = [(round(v, decimal) if v is not None else None) for v in col.to_pylist()]
             arrays.append(pa.array(rounded, type=col.type))
         else:
             arrays.append(col)
@@ -180,9 +176,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         # Sort result by groupby columns for consistent comparison
         result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
@@ -191,10 +185,7 @@ class TestParquery(object):
         result_itt = self.helper_itt_groupby(data_list, groupby_lambda)
         uniquekeys = result_itt["uniquekeys"]
         print(uniquekeys)
-        assert all(
-            a == b
-            for a, b in zip([x for x in result_parquery["f0"].to_pylist()], uniquekeys)
-        )
+        assert all(a == b for a, b in zip([x for x in result_parquery["f0"].to_pylist()], uniquekeys))
 
     def test_groupby_02(self, engine):
         """
@@ -224,18 +215,14 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
         result_itt = self.helper_itt_groupby(data_list, groupby_lambda)
         uniquekeys = sorted(result_itt["uniquekeys"])
         print(uniquekeys)
-        tuple_list = sorted(
-            [x["f0"], x["f1"], x["f2"]] for x in result_parquery.to_pylist()
-        )
+        tuple_list = sorted([x["f0"], x["f1"], x["f2"]] for x in result_parquery.to_pylist())
         assert all(a == b for a, b in zip(tuple_list, uniquekeys))
 
     def test_groupby_03(self, engine):
@@ -270,9 +257,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -290,12 +275,7 @@ class TestParquery(object):
                 f5 += row[5]
                 f6 += row[6]
             ref.append([f0, f4, f5, f6])
-        result_ref = pa.table(
-            {
-                col: [row[i] for row in ref]
-                for i, col in enumerate(result_parquery.column_names)
-            }
-        )
+        result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -336,9 +316,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -356,9 +334,7 @@ class TestParquery(object):
                 f5 += row[5]
                 f6 += row[6]
             ref.append(f0 + [f4, f5, f6])
-        tuple_list = sorted(
-            [x["f0"], x["f1"], x["f2"]] for x in result_parquery.to_pylist()
-        )
+        tuple_list = sorted([x["f0"], x["f1"], x["f2"]] for x in result_parquery.to_pylist())
         assert all(a == b for a, b in zip(tuple_list, uniquekeys))
 
     def test_groupby_05(self, engine):
@@ -392,13 +368,11 @@ class TestParquery(object):
             self.filename = tempfile.mkstemp(prefix="test-")[-1]
             df_to_parquet(table, self.filename)
             result_parquery = aggregate_pq(
-                self.filename, groupby_cols, agg_list, as_df=False, engine=engine
+                self.filename, groupby_cols, agg_list, as_df=False, engine=engine, zero_filter=False
             )
             print(result_parquery)
             print("--> Itertools")
-            data_list = list(
-                zip(*[table[col].to_pylist() for col in table.column_names])
-            )
+            data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
             result_itt = self.helper_itt_groupby(data_list, groupby_lambda)
             uniquekeys = result_itt["uniquekeys"]
             print(uniquekeys)
@@ -409,12 +383,7 @@ class TestParquery(object):
                     f0 = row[0]
                     f1 += row[1]
                 ref.append([f0] + [f1])
-            result_ref = pa.table(
-                {
-                    col: [row[i] for row in ref]
-                    for i, col in enumerate(result_parquery.column_names)
-                }
-            )
+            result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
             result_ref = round_float_columns(result_ref, 6)
             result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -448,9 +417,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -468,12 +435,7 @@ class TestParquery(object):
                 f5 += 1
                 f6 += 1
             ref.append([f0, f4, f5, f6])
-        result_ref = pa.table(
-            {
-                col: [row[i] for row in ref]
-                for i, col in enumerate(result_parquery.column_names)
-            }
-        )
+        result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -507,9 +469,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -528,12 +488,7 @@ class TestParquery(object):
                 f5 += 1
                 f6 += 1
             ref.append([f0, f4, f5, f6])
-        result_ref = pa.table(
-            {
-                col: [row[i] for row in ref]
-                for i, col in enumerate(result_parquery.column_names)
-            }
-        )
+        result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -603,9 +558,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -640,9 +593,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -661,12 +612,7 @@ class TestParquery(object):
                 f5 += 1
                 f6 += 1
             ref.append([f0, f4, f5, f6])
-        result_ref = pa.table(
-            {
-                col: [row[i] for row in ref]
-                for i, col in enumerate(result_parquery.column_names)
-            }
-        )
+        result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -706,9 +652,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -743,9 +687,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Itertools")
         data_list = list(zip(*[table[col].to_pylist() for col in table.column_names]))
@@ -764,12 +706,7 @@ class TestParquery(object):
                 f5 += 1
                 f6 += 1
             ref.append([f0, f4, f5, f6])
-        result_ref = pa.table(
-            {
-                col: [row[i] for row in ref]
-                for i, col in enumerate(result_parquery.column_names)
-            }
-        )
+        result_ref = pa.table({col: [row[i] for row in ref] for i, col in enumerate(result_parquery.column_names)})
         result_ref = round_float_columns(result_ref, 6)
         result_parquery = round_float_columns(result_parquery, 6)
         # Sort for consistent comparison across engines
@@ -807,9 +744,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         # Sort for consistent comparison across engines
         result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
@@ -832,9 +767,7 @@ class TestParquery(object):
         result_data = [list(row.values())[1:] for row in result_parquery.to_pylist()]
         for i, (result_row, ref_row) in enumerate(zip(result_data, ref)):
             for j, (r, e) in enumerate(zip(result_row, ref_row)):
-                assert math.isclose(r, e, rel_tol=1e-10, abs_tol=1e-10), (
-                    f"Row {i}, col {j}: {r} != {e}"
-                )
+                assert math.isclose(r, e, rel_tol=1e-10, abs_tol=1e-10), f"Row {i}, col {j}: {r} != {e}"
 
     def test_groupby_11(self, engine):
         """
@@ -866,9 +799,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         # Sort for consistent comparison across engines
         result_parquery = sort_table(result_parquery, groupby_cols)
         print(result_parquery)
@@ -887,9 +818,7 @@ class TestParquery(object):
                 f4.append(row[4])
                 f5.append(row[5])
                 f6.append(row[6])
-            ref.append(
-                [statistics.stdev(f4), statistics.stdev(f5), statistics.stdev(f6)]
-            )
+            ref.append([statistics.stdev(f4), statistics.stdev(f5), statistics.stdev(f6)])
         result_values = [list(x.values())[1:] for x in result_parquery.to_pylist()]
         for i, (result_row, ref_row) in enumerate(zip(result_values, ref)):
             for j, (val, ref_val) in enumerate(zip(result_row, ref_row)):
@@ -918,9 +847,7 @@ class TestParquery(object):
         print("--> ParQuery")
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         df_to_parquet(table, self.filename)
-        result_parquery = aggregate_pq(
-            self.filename, groupby_cols, agg_list, as_df=False, engine=engine
-        )
+        result_parquery = aggregate_pq(self.filename, groupby_cols, agg_list, as_df=False, engine=engine)
         print(result_parquery)
         print("--> Numpy")
         np_result = [
@@ -950,12 +877,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms01(self, engine):
         """
@@ -978,12 +900,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms02(self, engine):
         """
@@ -1006,12 +923,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms03(self, engine):
         """
@@ -1034,12 +946,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms_04(self, engine):
         """
@@ -1062,12 +969,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms_05(self, engine):
         """
@@ -1090,12 +992,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms_06(self, engine):
         """
@@ -1118,12 +1015,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_where_terms07(self, engine):
         """
@@ -1147,12 +1039,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_natural_notation(self, engine):
         """
@@ -1175,12 +1062,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_natural_notation_2(self, engine):
         """
@@ -1203,12 +1085,7 @@ class TestParquery(object):
             as_df=False,
             engine=engine,
         )
-        assert all(
-            a == b
-            for a, b in zip(
-                [list(row.values()) for row in result_parquery.to_pylist()], ref
-            )
-        )
+        assert all(a == b for a, b in zip([list(row.values()) for row in result_parquery.to_pylist()], ref))
 
     def test_non_existing_column(self, engine):
         """
@@ -1315,9 +1192,7 @@ class TestParquery(object):
         """
         self.filename = tempfile.mkstemp(prefix="test-")[-1]
         data_table = pa.table({"f0": [], "f1": []})
-        with pa.parquet.ParquetWriter(
-            self.filename, data_table.schema, version="2.6", compression="ZSTD"
-        ) as writer:
+        with pa.parquet.ParquetWriter(self.filename, data_table.schema, version="2.6", compression="ZSTD") as writer:
             writer.write_table(data_table)
         terms_filter = [("f0", ">", 10000)]
         result_parquery = aggregate_pq(

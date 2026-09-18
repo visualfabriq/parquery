@@ -8,7 +8,9 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
 # Import shared types and utilities from main aggregate module
-from parquery.tool import SAFE_PREAGGREGATE, DataFilter, create_empty_result
+from parquery.tool import SAFE_PREAGGREGATE
+from parquery.tool import DataFilter
+from parquery.tool import create_empty_result
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ def aggregate_pq_pyarrow(
     data_filter: DataFilter | None = None,
     aggregate: bool = True,
     debug: bool = False,
+    zero_filter: bool = True,
 ) -> pa.Table:
     """
     Aggregate a Parquet file using PyArrow with OLAP-style groupby operations.
@@ -116,15 +119,7 @@ def aggregate_pq_pyarrow(
     disable_preaggregate = len(groupby_cols) >= 5
 
     # Get all columns needed (only columns that exist)
-    all_cols = sorted(
-        list(
-            set(
-                groupby_cols
-                + [x[0] for x in measure_cols]
-                + [x[0] for x in data_filter]
-            )
-        )
-    )
+    all_cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols] + [x[0] for x in data_filter])))
 
     # Input columns (for processing, before renaming)
     input_cols = sorted(list(set(groupby_cols + [x[0] for x in measure_cols])))
@@ -133,9 +128,7 @@ def aggregate_pq_pyarrow(
     agg = _unify_aggregation_operators(measure_cols)
     agg_ops = set(agg.values())
     # Pre-aggregate only when safe operations AND not too many dimensions
-    preaggregate = (
-        aggregate and agg_ops.issubset(SAFE_PREAGGREGATE) and not disable_preaggregate
-    )
+    preaggregate = aggregate and agg_ops.issubset(SAFE_PREAGGREGATE) and not disable_preaggregate
 
     # Create dataset (replaces ParquetFile)
     try:
@@ -144,8 +137,17 @@ def aggregate_pq_pyarrow(
         gc.collect()
         dataset = ds.dataset(file_name, format="parquet")
 
-    # Convert data filter to PyArrow expression (automatic push-down)
+    # Convert data filter to PyArrow expression (automatic push-down). A source
+    # row can be discarded before grouping only when every requested operation
+    # is SUM: zero is then neutral for every aggregate. Other operations (mean,
+    # count, min/max, distinct) must retain zero-valued rows.
     data_filter_expr = convert_data_filter(data_filter) if data_filter else None
+    if zero_filter and aggregate and measure_cols and all(x[1].lower() == "sum" for x in measure_cols):
+        non_zero_expr = None
+        for col, _op, _output in measure_cols:
+            expr = pc.field(col) != 0
+            non_zero_expr = expr if non_zero_expr is None else non_zero_expr | expr
+        data_filter_expr = non_zero_expr if data_filter_expr is None else data_filter_expr & non_zero_expr
 
     # Get fragments with automatic filter push-down
     fragments = list(dataset.get_fragments(filter=data_filter_expr))
@@ -159,23 +161,17 @@ def aggregate_pq_pyarrow(
         for rg_info in fragment.row_groups:
             row_group_counter += 1
             if debug:
-                logger.debug(
-                    f"Aggregating row group {row_group_counter} of {total_row_groups}"
-                )
+                logger.debug(f"Aggregating row group {row_group_counter} of {total_row_groups}")
 
             # Read single row group using subset (memory efficient: ~100k rows at a time)
             fragment_subset = fragment.subset(row_group_ids=[rg_info.id])
 
             try:
-                sub = fragment_subset.to_table(
-                    columns=all_cols, filter=data_filter_expr
-                )
+                sub = fragment_subset.to_table(columns=all_cols, filter=data_filter_expr)
             except OSError:
                 gc.collect()
                 pa.default_memory_pool().release_unused()  # Return memory to OS
-                sub = fragment_subset.to_table(
-                    columns=all_cols, filter=data_filter_expr
-                )
+                sub = fragment_subset.to_table(columns=all_cols, filter=data_filter_expr)
 
             # Skip if no rows after filtering
             if sub.num_rows == 0:
@@ -183,16 +179,12 @@ def aggregate_pq_pyarrow(
                 continue
 
             # unneeded columns (when we filter on a non-result column)
-            unneeded_columns = [
-                col for col in sub.column_names if col not in input_cols
-            ]
+            unneeded_columns = [col for col in sub.column_names if col not in input_cols]
             if unneeded_columns:
                 sub = sub.drop_columns(unneeded_columns)
 
             if preaggregate:
-                sub = groupby_py3(
-                    groupby_cols, agg, sub, use_threads=not disable_threads
-                )
+                sub = groupby_py3(groupby_cols, agg, sub, use_threads=not disable_threads)
 
             result.append(sub)
 
@@ -212,18 +204,29 @@ def aggregate_pq_pyarrow(
         result_cols = groupby_cols + [x[2] for x in measure_cols]
         return create_empty_result(result_cols, as_df=False)
 
-    table = finalize_group_by(
-        result, groupby_cols, agg, aggregate, use_threads=not disable_threads
-    )
+    table = finalize_group_by(result, groupby_cols, agg, aggregate, use_threads=not disable_threads)
 
     rename_columns = {x[0]: x[2] for x in measure_cols if x[0] != x[2]}
     if rename_columns:
-        new_columns = [
-            rename_columns.get(c_name, c_name) for c_name in table.column_names
-        ]
+        new_columns = [rename_columns.get(c_name, c_name) for c_name in table.column_names]
         table = table.rename_columns(new_columns)
 
+    if zero_filter and aggregate:
+        output_measure_cols = [x[2] for x in measure_cols]
+        table = zero_filter_measure_rows(table, output_measure_cols)
+
     return table
+
+
+def zero_filter_measure_rows(table: pa.Table, measure_cols: list[str]) -> pa.Table:
+    """Keep rows where at least one requested measure is non-zero."""
+    if table.num_rows == 0 or not measure_cols:
+        return table
+    keep = pa.array([False] * table.num_rows)
+    for column in measure_cols:
+        non_zero = pc.fill_null(pc.not_equal(table[column], 0), False)
+        keep = pc.or_(keep, non_zero)
+    return table.filter(keep)
 
 
 def finalize_group_by(
@@ -299,9 +302,7 @@ def groupby_py3(
     if not agg:
         return table
 
-    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(
-        list(agg.items())
-    )
+    grouped_table = table.group_by(groupby_cols, use_threads=use_threads).aggregate(list(agg.items()))
     rename_cols = {f"{col}_{op}": col for col, op in agg.items()}
     col_names = [rename_cols.get(c, c) for c in grouped_table.column_names]
     return grouped_table.rename_columns(col_names)
@@ -334,9 +335,6 @@ def convert_data_filter(data_filter: DataFilter) -> pc.Expression | None:
                 f"Valid operators: {', '.join(valid_ops)}"
             )
 
-        if data_filter_expr is None:
-            data_filter_expr = expr
-        else:
-            data_filter_expr = data_filter_expr & expr
+        data_filter_expr = expr if data_filter_expr is None else data_filter_expr & expr
 
     return data_filter_expr
